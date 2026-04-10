@@ -42,7 +42,7 @@ def run_eegnet_cv(
     n_splits=10,
     epochs=50,
     batch_size=16,
-    learning_rate=1e-3,
+    learning_rate=5e-4,
 ):
     """
     Run EEGNet with cross-validation using the same split logic
@@ -74,7 +74,7 @@ def run_eegnet_cv(
             Chans=n_channels,
             Samples=n_samples,
             dropoutRate=0.5,
-            kernLength = 128,   
+            kernLength=64,
             F1=8,
             D=2,
             F2=16,
@@ -125,7 +125,7 @@ def run_eegnet_cv(
 
 
 if __name__ == "__main__":
-    files = get_training_files("data")
+    files = get_training_files("data/2b")
 
     # your chosen preprocessing factors
     config = PreprocessingConfig(A=1, B=2, C=1, D=2)

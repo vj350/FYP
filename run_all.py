@@ -41,6 +41,7 @@ from DeepConvNet import run_deepconvnet_cv
 from ShallowConvNet import run_shallowconvnet_cv
 from EEGTCNet import run_eegtcnet_cv
 from ATCNet import run_atcnet_cv
+from MCSANet import run_mcsanet_cv
 
 
 # =========================
@@ -68,7 +69,7 @@ def parse_config_str(config_str: str) -> PreprocessingConfig:
 # =========================
 # Model registry
 # =========================
-ALL_MODELS = ["csp", "fbcsp", "eegnet", "deepconv", "shallowconv", "eegtcnet", "atcnet"]
+ALL_MODELS = ["csp", "fbcsp", "eegnet", "deepconv", "shallowconv", "eegtcnet", "atcnet", "mcsanet"]
 
 MODEL_DISPLAY = {
     "csp":          "CSP + SVM",
@@ -78,6 +79,7 @@ MODEL_DISPLAY = {
     "shallowconv":  "ShallowConvNet",
     "eegtcnet":     "EEG-TCNet",
     "atcnet":       "ATCNet",
+    "mcsanet":      "MCSANet",
 }
 
 
@@ -94,13 +96,13 @@ def run_model(name, X, y, groups, config, n_splits):
     elif name == "eegnet":
         return run_eegnet_cv(
             X, y, groups, config, n_splits=n_splits,
-            epochs=50, batch_size=16, learning_rate=1e-3
+            epochs=50, batch_size=16, learning_rate=5e-4
         )
 
     elif name == "deepconv":
         return run_deepconvnet_cv(
             X, y, groups, config, n_splits=n_splits,
-            epochs=50, batch_size=16, learning_rate=1e-3
+            epochs=50, batch_size=16, learning_rate=5e-4
         )
 
     elif name == "shallowconv":
@@ -112,13 +114,19 @@ def run_model(name, X, y, groups, config, n_splits):
     elif name == "eegtcnet":
         return run_eegtcnet_cv(
             X, y, groups, config, n_splits=n_splits,
-            epochs=80, batch_size=16, learning_rate=1e-3
+            epochs=80, batch_size=16, learning_rate=5e-4
         )
 
     elif name == "atcnet":
         return run_atcnet_cv(
             X, y, groups, config, n_splits=n_splits,
             epochs=100, batch_size=16, learning_rate=1e-3
+        )
+
+    elif name == "mcsanet":
+        return run_mcsanet_cv(
+            X, y, groups, config, n_splits=n_splits,
+            epochs=300, batch_size=16, learning_rate=1e-3
         )
 
     else:
@@ -182,7 +190,7 @@ def main():
 
     config = parse_config_str(args.config)
 
-    files = get_training_files("data")
+    files = get_training_files("data/2b")
     print(f"Found {len(files)} subject files.")
     print(f"Config: {config}")
     print(f"Models: {args.models}")

@@ -119,7 +119,7 @@ def run_shallowconvnet_cv(
 
 
 if __name__ == "__main__":
-    files = get_training_files("data")
+    files = get_training_files("data/2b")
 
     # your chosen preprocessing factors
     config = PreprocessingConfig(A=1, B=2, C=1, D=2)

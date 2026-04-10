@@ -42,7 +42,7 @@ def run_deepconvnet_cv(
     n_splits=10,
     epochs=50,
     batch_size=16,
-    learning_rate=1e-3,
+    learning_rate=5e-4,
 ):
     """
     Run DeepConvNet with cross-validation using the same split logic
@@ -119,7 +119,7 @@ def run_deepconvnet_cv(
 
 
 if __name__ == "__main__":
-    files = get_training_files("data")
+    files = get_training_files("data/2b")
 
     # your chosen preprocessing factors
     config = PreprocessingConfig(A=1, B=2, C=1, D=2)

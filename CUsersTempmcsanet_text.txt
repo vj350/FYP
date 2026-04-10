@@ -1,0 +1,865 @@
+--- PAGE 1 ---
+Signal, Image and Video Processing          (2026) 20:190 
+https://doi.org/10.1007/s11760-026-05232-6
+ORIGINAL PAPER
+MCSANet: A multiscale convolutional self attention network with data
+augmentation for motor imagery EEG classiﬁcation
+Seema Devi 1 · Kamal Singh 1 · Nitin Singh Singha 1 · Mahesh K. Singh 1
+Received: 8 August 2025 / Revised: 16 December 2025 / Accepted: 22 February 2026
+© The Author(s), under exclusive licence to Springer-Verlag London Ltd., part of Springer Nature 2026
+Abstract
+Attention-based neural networks have advanced EEG decoding for motor imagery (MI) in Brain–Computer Interfaces (BCIs)
+by capturing global temporal dependencies, whereas convolutional neural networks (CNNs) are particularly effective in
+capturing localized spatio–temporal patterns. Combining both enables an effective extraction of local and global features.
+However, ﬁxed kernel sizes in traditional CNNs limit feature diversity and accuracy. To address this, we propose the Multi-
+Scale Convolutional Self-Attention Network (MCSANet), which integrates multi-scale CNNs with attention mechanisms and
+introduces the Temporal Segment Shufﬂing (TSS) data augmentation strategy to enhance model performance further. Trained
+on BCIC-IV -2a and BCIC-IV -2b datasets in both subject-dependent and subject-independent setups, MCSANet achieves
+78.11% accuracy (κ = 0.72) on BCIC-IV -2a and 85.56% accuracy (κ = 0.72) on BCIC-IV -2b, outperforming state-of-the-
+art methods. TSS further boosts accuracy by 5 .89% and 2.8% on the respective datasets. These results highlight the potential
+of MCSANet and TSS for more accurate and robust real-world BCI applications.
+Keywords Attention · Brain computer interface · Deep learning · EEG · Motor imagery · Multiscale CNN
+1 Introduction
+Brain–Computer Interfaces (BCIs) enable direct communi-
+cation between the brain and external devices by acquiring,
+processing, and translating neural signals into control com-
+mands. In the Motor Imagery (MI) paradigm, users mentally
+simulate limb movements without physical execution. Elec-
+troencephalography (EEG) is widely used for MI-BCIs due
+to its portability, affordability, and ease of use [ 1]. These
+systems are vital for neural rehabilitation and assistive tech-
+nologies, enabling individuals with motor impairments to
+operate devices such as wheelchairs [ 2], thereby improving
+independence and quality of life. However, challenges such
+B Nitin Singh Singha
+nitinsingha@nitdelhi.ac.in
+Seema Devi
+seema.devi@nitdelhi.ac.in
+Kamal Singh
+kamalsinghrana@nitdelhi.ac.in
+Mahesh K. Singh
+ksmahesh@nitdelhi.ac.in
+1 ECE Department, National Institute of Technology, Delhi
+110036, Delhi, India
+as low signal-to-noise ratio (SNR), artifacts, limited spatial
+resolution, and inter-subject variability hinder classiﬁcation
+accuracy and generalization [ 3].
+To address these challenges, numerous studies have been
+conducted to achieve high classiﬁcation accuracies. Early
+research primarily relied on handcrafted features such as the
+Continuous Wavelet Transform (CWT) and Power Spectral
+Density (PSD), Discrete Wavelet Transform (DWT), Empiri-
+cal Mode Decomposition (EMD), and spectrogram analysis,
+often combined with spatial ﬁltering (e.g., Common Spa-
+tial Patterns (CSP), channel selection, and data augmentation
+[4]. While effective, these approaches require manual feature
+engineering and separate extraction–classiﬁcation stages,
+limiting adaptability and generalization.
+Now, Deep learning has enabled end-to-end learning of
+spatial–temporal features directly from raw EEG, overcom-
+ing the limitations of handcrafted features. Convolutional
+neural networks (CNNs), such as EEGNet [ 5], DeepCon-
+vNet, and ShallowConvNet [ 6], have been widely applied.
+However, their reliance on ﬁxed kernel sizes limits the abil-
+ity to capture multi-scale patterns and generalize across
+EEG’s inherent variability, often resulting in moderate accu-
+racy (68–72%). Recent CNN variants such as FBMSNet,
+which leverages ﬁlter banks with mixed depthwise con-
+0123456789().: V,-vol 123
+--- PAGE 2 ---
+  190 Page 2 of 11 Signal, Image and Video Processing           (2026) 20:190 
+volutions for spectral–temporal extraction [ 7], and IFNet,
+which models cross-frequency interactions between low-
+and high-frequency bands [ 8, 9], have improved repre-
+sentation learning. However, CNNs remain constrained by
+their limited receptive ﬁelds, hinders the modeling of long-
+term dependencies. To address this, hybrid models combine
+CNNs for local feature extraction with LSTMs or transform-
+ers for long-range temporal modeling [ 10]. Compared with
+LSTMs, transformers more effectively capture long-range
+dependencies and support parallel processing, while atten-
+tion mechanisms enhance both accuracy and interpretability
+[3, 11]. Recent graph-CNNs, such as DGC-Link [12], model
+inter-regional correlations using dual-gate Chebyshev ﬁlters
+also exploit long-range connectivity. However, graph CNNs
+rely on ﬁxed adjacency matrices that assume identical inter-
+channel relationships across subjects, limiting their ability to
+capture subject-speciﬁc functional connectivity. Attention-
+based CNNs, by contrast, dynamically learn spatial–temporal
+dependencies and show better adaptability for MI EEG
+classiﬁcation. However, many CNN–attention hybrids still
+operate at a single scale, risking information loss across other
+temporal resolutions.
+Recent works address these limitations through multi-
+scale feature extraction [ 13], compact multi-branch CNNs
+[14], and temporal convolutional modules that fuse multi-
+scale features while modelling both short- and long-term
+dependencies [ 15]. SecNet further employs multi-branch
+spatio-temporal learning with covariance pooling to enhance
+inter-session robustness [ 16]. While effective, such multi-
+branch designs often increase model complexity and rarely
+explore hold-out subject analysis for better generalization.
+Inspired by these studies, we propose the Multi-scale
+Convolutional Self-Attention Network (MCSANet), an end-
+to-end architecture combining multi-scale temporal convolu-
+tions with self-attention to capture long-range dependencies
+and enhance feature representation. The key contributions of
+this study are as follows:
+1. We propose the MCSANet model for multiscale feature
+extraction through multiple temporal convolutional layers.
+2. We introduce a data augmentation technique, Temporal
+Segment Shufﬂing (TSS), for generating additional sample
+trials.
+3. We integrate MCSANet with the TSS strategy and
+evaluate it on the BCIC-IV 2a and 2b datasets under
+both subject-dependent and subject-independent settings.
+MCSANet outperforms state-of-the-art methods [3, 5, 6, 15–
+17],achieving average accuracies of 78.11% and 85.56%
+, (subject-dependent) and 63.21% and 78.52% (subject-
+independent), respectively.
+4. We also conducted an ablation study and visualiza-
+tion analysis to assess the individual contributions of TSS,
+attention mechanisms, model variants, and learned features,
+demonstrating a 5.89% accuracy improvement.
+2 Methodology
+2.1 Datasets
+The BCI Competition (BCIC)-IV -2a dataset [ 18], provided
+by Graz University of Technology in 2008, is a widely used
+benchmark for MI-EEG classiﬁcation. In this study, the com-
+plete dataset, containing data from 9 subjects, was used. EEG
+signals were recorded under controlled conditions with min-
+imal artifacts, using a sampling frequency of 250 Hz. The
+dataset includes signals from 22 electrodes, and each subject
+participated in two sessions. Each session comprises 288 tri-
+als, resulting in a total of 5,184 trials across all subjects.
+The BCIC-IV -2b dataset [19], also provided by Graz Uni-
+versity of Technology, was used similarly. The full 2b dataset
+includes data from 9 subjects, recorded under controlled con-
+ditions with minimal artifacts, and a sampling rate of 250
+Hz. Unlike 2a, this dataset includes recordings from only 3
+electrodes. Each subject participated in 5 sessions: the train-
+ing sessions contain 400 trials„ while the evaluation sessions
+include 320 trials for testing.
+2.2 Input representation
+In this paper, we present an approach that pre-processes EEG
+signals for MI task classiﬁcation. After preprocessing, the
+EEG data are organized into MI trials, which are then fed
+into the proposed MCSANet model. Each trial is represented
+as X
+n ∈ RCh×Ts , where Ch is the number of EEG channels
+(electrodes), and Ts is the number of time points.
+The objective of the proposed attention-based model is to
+classify each input MI trial Xn into its corresponding class
+yn . This is achieved using a labeled dataset
+T ={ (Xn, yn)}m
+n=1, (1)
+where yn ∈{ 1,..., i} represents the class label of trial Xn ,
+and i denotes the total number of classes in T . For the BCIC-
+IV -2a dataset [18], each MI trial consists of 1125 time points,
+obtained by sampling 4.5 s (from 1.5 s to 6.0 s) as the cue
+appears at 2.0 s, we consider 0.5 s before the cue appears
+to record the preparatory action for each subject as used in
+[3] of EEG data at a sampling frequency of 250 Hz (i.e.,
+250 × 4.5 = 1125), across Ch = 22 EEG channels. The
+dataset comprises i = 4 MI classes and m = 288 trials per
+session.
+2.3 Pre-processing
+2.3.1 Data normalization
+Each MI-EEG trial comprises all channels and time points,
+represented as Xn (E q .1). We perform z-score normalization
+123
+--- PAGE 3 ---
+Signal, Image and Video Processing           (2026) 20:190 Page 3 of 11   190 
+Fig. 1 Temporal Segment Shufﬂing (TSS) divides the signal into equal
+4 segments and randomly shufﬂes them while preserving alignment
+across time points
+along the time dimension for each channel within every trial:
+ˆXn(c, t) = Xn(c, t) − μn(c)
+σn(c) , (2)
+where μn(c) and σn(c) are the mean and standard deviation
+of channel c in trial Xn . This ensures zero mean and unit
+variance per channel, reducing inter-trial and inter-channel
+variability and improving model stability.
+2.3.2 Temporal segment shufﬂing augmentation
+techniques
+In MI-EEG classiﬁcation, the limited number of trials
+restricts the learning of robust and discriminative features,
+reducing accuracy. To address this issue, we propose Tem-
+poral Segment Shufﬂing (TSS) an extension to Segmentation
+and Recombination (S&R), a data augmentation strategy that
+generates new trials by recombining temporal segments from
+trials of the same class. TSS enriches intra-class variabil-
+ity, strengthens class-speciﬁc representations, and improves
+model generalization. We now present a detailed explanation
+of the proposed TSS method.
+Let X
+n denote the nth MI-EEG trial. To generate a new
+synthetic trial, we randomly select T trials from the same
+class. In this work, we set T = 4, which means that four tri-
+als - denoted as X1, X2, X3, and X4 are used in each new trial
+generation as shown in Fig. 1. If we select only two trails, the
+randomness is signiﬁcantly reduced, resulting in less diverse
+data. However, using fewer trails can sometimes lead to more
+unique new trails. This creates a trade-off between random-
+ness and uniqueness. To achieve a balance, we have chosen
+to generate four trails, ensuring sufﬁcient randomness while
+maintaining diversity in the new data without any issues.
+This value was determined through experimental analysis.
+All selected trials come from the same subject and share the
+same class label y
+n , ensuring class consistency during aug-
+mentation.
+Segment Selection Strategy: The number of segments S
+into which each trial is divided is selected as a multiple of T
+(e.g., if T = 4, then S = 4, 8, 12,... ). This ensures that the
+segments can be evenly distributed across all selected trials
+without leaving any segments unassigned. More generally, if
+T = N , then S should be a multiple of N .
+Each segment is taken from the same relative time position
+in all trials to maintain temporal alignment. This ensures that
+the timing and structure of the trail remain consistent within
+each segment. The next segment is then taken from another
+randomly selected trial, directly after the ﬁrst one, to avoid
+losing information or disrupting the signal pattern.
+Mathematically, given four selected trialsX
+1, X2, X3, X4,
+each trial is divided along the time axis into S segments:
+X1 =[ X 1
+1, X 2
+1,..., X S
+1 ], X2 =[ X 1
+2, X 2
+2,..., X S
+2 ],
+X3 =[ X 1
+3, X 2
+3,..., X S
+3 ], X4 =[ X 1
+4, X 2
+4,..., X S
+4 ].
+(3)
+Each original trial comprised 1125 time points (equivalent
+to 4.5s). When partitioned into four equal segments ( S = 4),
+each segment consisted of 281 time points, corresponding
+to 1.125s. We also discussed that TSS preserves temporal
+alignment, with detailed illustrations provided in the supple-
+mentary material (Fig. S1–S2 and Table S1).
+New Trial Generation: A new synthetic trial is con-
+structed by cyclically selecting segments from the original
+trials. For example:
+•If T = 4 and S = 4:
+X
+new =[ X 1
+1, X 2
+2, X 3
+3, X 4
+4] (4)
+•If T = 4 and S = 8:
+Xnew =[ X 1
+1, X 2
+2, X 3
+3, X 4
+4, X 5
+1, X 6
+2, X 7
+3, X 8
+4]. (5)
+In the general case:
+Xnew =[ X 1
+1, X 2
+2,..., X S− 3
+1 , X S− 2
+2 , X S− 1
+3 , X S
+4 ]. (6)
+This cyclic segment recombination increases data diver-
+sity while preserving temporal and class consistency, making
+the augmented data more effective for model training.
+The number of new trials that can be generated depends
+123
+--- PAGE 4 ---
+  190 Page 4 of 11 Signal, Image and Video Processing           (2026) 20:190 
+Fig. 2 Complete Architecture of the proposed MCSANet model
+on the transfer of information from the original trials to
+the new trial at corresponding time points. Since each
+segment in the new trial can originate from any of the
+selected trials, a large number of unique combinations can
+be formed. This ﬂexibility allows for extensive augmenta-
+tion. The selection of trials and the segment conﬁguration
+are determined by the experimental setup, as described in
+Section IV .
+TSS vs. Segmentation and Recombination (S&R) The
+proposed TSS follows the same segment-index–aligned
+recombination principle as S&R [ 20] but introduces proce-
+dural reﬁnements rather than a fundamentally new approach.
+In S&R, each trial is divided into (K) non-overlapping seg-
+ments, and new trials are formed by concatenating the (k)-th
+segment from randomly chosen trials of the same class,
+thereby preserving temporal order while increasing variabil-
+ity. In contrast, TSS selects 4 trials at a time, with segment
+selection tied to trial selection in multiples of 4. When
+the number of segments exceeds the number of trials, TSS
+applies a cyclic procedure (Eq. [6]) to generate complete
+trials. Moreover, unlike S&R, where multiple segments can
+originate from the same trial, TSS ensures that no two or
+three segments are taken from a single trial, thereby enforcing
+greater diversity across the recombined segments. TSS pro-
+duces more diverse recombinations and can outperform S&R
+in conditions where richer trial diversity improves general-
+ization. Experimental results of TSS and S&R are described
+in Section IV .
+2.4 Network architecture
+The proposed DL architecture (Fig. 2) consists of three main
+blocks. First, the Convolutional Block extracts features by
+applying multi-scale temporal convolutional layers to cap-
+ture temporal information, along with depthwise convolution
+to learn spatial patterns. Next, the Attention Block takes
+these extracted features and selectively emphasizes the most
+relevant spatial-temporal components that contribute to the
+motor imagery (MI) task. Finally, the Classiﬁcation Block
+processes the reﬁned features and assigns them to the correct
+class using a softmax activation function.
+2.4.1 Convolutional block
+In the proposed MCSANet architecture, we incorporate
+multiple temporal convolutional layers to capture a richer
+hierarchy of temporal features from the input MI-EEG sig-
+nals. To achieve this, we utilize a stack of three 2D temporal
+convolutional layers, each designed with a different ﬁlter size
+corresponding to varying temporal resolutions. Speciﬁcally,
+ﬁlter lengths ( k) are set to half, approximately one-fourth,
+and one-eighth of the sampling rate. This approach enables
+the model to capture temporal patterns across different time-
+point scales. Each layer uses the same number of ﬁlters,
+denoted as F
+1 ﬁlters. The outputs of the three layers are
+concatenated to integrate diverse temporal representations
+from the input. The concatenated output from multiple lay-
+ers undergoes batch normalization.
+In the next stage, a depth-wise convolution is applied for
+spatial feature extraction. The ﬁlter size is given byF = D×
+F
+1, where D is the number of ﬁlters linked to each temporal
+feature with dimensions (Ch, 1), where Ch represents the
+number of EEG channels. This depth-wise layer is followed
+by an average pooling layer with a size of (1, 8).
+Finally, the output of the previous layer is passed through
+a temporal convolutional layer, where the number of ﬁlters is
+doubled compared to the ﬁrst convolutional layer. The ﬁlter
+size is set to (1, 16), followed by an average pooling layer
+with the same size as the ﬁrst average pooling layer.
+The convolutional block generates a temporal feature
+sequence X
+c ∈ RTsc× fcn , where Tsc denotes the number
+of temporal vectors, each with a feature dimension fcn .T h e
+feature dimension is deﬁned as fcn = F2 = F1 × D and is
+empirically set to 16. The length of the temporal sequence
+is reduced by two average pooling layers(size=8), and the
+resulting length is given by:
+T
+sc = Ts
+8 × 8 (7)
+This output is then passed to the attention mechanism for
+further processing. Each block also includes batch normal-
+ization, ELU activation, pooling, and dropout layers to ensure
+123
+--- PAGE 5 ---
+Signal, Image and Video Processing           (2026) 20:190 Page 5 of 11   190 
+Fig. 3 Multi Head Self Attention
+effective training and prevent overﬁtting. These blocks serve
+as the baseline models without any attention mechanism.
+2.4.2 Attention block
+MI-EEG signals exhibit synchronization over time, which
+can be analyzed using coherence measures to reveal connec-
+tions in brain activity patterns. Since these patterns involve
+relationships both across time and across channels, effec-
+tive decoding requires capturing both temporal and spatial
+features. While CNNs are widely used for this task, their
+limited receptive ﬁeld restricts their ability to capture long-
+range dependencies. Self-attention addresses this by learning
+long-term relationships that CNNs may overlook. Simply,
+self-attention works by focusing on the most relevant parts
+of the input data, similar to how human attention prioritizes
+important elements while ignoring less important ones. The
+mechanism uses three components: queries (features to focus
+on), keys (cues to measure relevance), and values (input fea-
+tures). Queries and keys interact to calculate attention scores,
+which determine the importance of each value. Using these
+scores, the self-attention block improves the model’s ability
+to focus on meaningful features, improving performance in
+decoding complex MI-EEG patterns.
+Our proposed model employs Multi-Head Self-Attention
+(MHSA) to compute attention scores. MHSA is the core
+component of the attention block, as illustrated in Fig. 3.I t
+consists of multiple parallel self-attention layers, each com-
+prising query, key, and value representations. The value of
+these query, key, and value is calculated from the output of the
+convolutional block by the linear transformation as follows:
+The output shape of the convolutional block is determined
+by
+X
+c ∈ RTsc× fcn (8)
+The parameters Tsc and fcn are deﬁned as described in Eq.
+7.
+We deﬁne H attention heads. For each head h =
+1,..., H , we learn distinct projection matrices(calculated
+as deﬁne in Eq. 9)[21]:
+W(h)
+Q , W(h)
+K , W(h)
+V ∈ R fcn×dh (9)
+dh = fcn
+H (10)
+where: fcn is the total input feature, H is the number of atten-
+tion heads, dh is the dimensionality of each attention head.
+Each head computes its queries, keys, and values as:
+Q(h) = Xc W(h)
+Q ∈ RTsc×dh (11)
+K(h) = Xc W(h)
+K ∈ RTsc×dh (12)
+V(h) = Xc W(h)
+V ∈ RTsc×dh (13)
+The attention weights are computed using scaled dot-product
+attention:
+α(h) = softmax
+(
+Q(h)(K(h))⊤
+√ dh
+)
+∈ RTsc×Tsc (14)
+Then compute the context vector for each head h:
+ch = αh vh where ch ∈ RTsc×dh (15)
+The context vectors from all attention heads are concate-
+nated and projected through a ﬁnal dense layer:
+C = concat(c1, c2,..., cH ) · WO,
+where WO ∈ Rdh× fcn .
+(16)
+In MHSA, the output is combined with the input from the
+preceding Convolutional block via a residual connection, for-
+mulated as y
+c = C+ Xc. The output yc of the Attention block
+is fed to the classiﬁer for decision making.
+2.4.3 Classiﬁer
+The ﬁnal classiﬁcation stage consists of a fully connected
+layer that processes the output from the attention block. This
+layer employs the softmax function to compute class proba-
+bilities by the following loss function:
+L =− 1
+Nb
+Nb∑
+Xn=1
+M∑
+yn=1
+yn log(ˆyn), (17)
+where yn denotes the actual class label, and ˆyn represents
+the predicted probability for the given input Xn . This func-
+tion helps in minimizing the difference between true and
+predicted labels to enhance model performance.
+123
+--- PAGE 6 ---
+  190 Page 6 of 11 Signal, Image and Video Processing           (2026) 20:190 
+Table 1 Subject-dependent Accuracy(Acc) and Kappa Score( κ) for BCIC-IV -2a Dataset
+Subject EEGNet ShallowNet DeepConvNet TCANet ATCNet TCNet Fusion SecNet MCSANet
+Acc(%) κ Acc(%) κ Acc(%) κ Acc(%) κ Acc(%) κ Acc(%) κ Acc(%) κ Acc(%) κ
+sub 1 82.88 0.79 84.07 0.80 79.58 0.76 80.31 0.77 83.50 0.80 81.75 0.78 78.23 0.76 84.48 0.81
+sub 2 58.86 0.49 62.37 0.50 63.75 0.53 57.53 0.48 61.20 0.50 60.72 0.49 58.16 0.48 62.73 0.50
+sub 3 90.10 0.87 93.14 0.91 89.72 0.83 91.53 0.86 90.87 0.86 92.16 0.90 88.25 0.81 91.28 0.85
+sub 4 69.53 0.58 67.16 0.58 68.26 0.59 66.09 0.55 70.11 0.61 69.63 0.63 68.73 0.58 71.75 0.67
+sub 5 74.32 0.63 75.72 0.63 70.69 0.61 74.02 0.65 72.70 0.63 74.94 0.65 73.62 0.60 73.55 0.68
+sub 6 60.87 0.49 63.91 0.50 63.26 0.53 60.06 0.50 62.65 0.52 61.85 0.51 62.13 0.50 65.20 0.55
+sub 7 83.29 0.78 81.90 0.77 84.72 0.80 77.25 0.70 85.20 0.81 84.43 0.80 82.35 0.80 86.90 0.82
+sub 8 83.45 0.79 84.07 0.80 81.80 0.72 76.67 0.74 82.00 0.75 80.97 0.73 81.43 0.79 82.57 0.74
+sub 9 81.49 0.78 84.38 0.80 83.26 0.75 78.52 0.72 83.85 0.78 83.04 0.77 79.28 0.72 84.58 0.82
+Average 76.09 0.69 77.41 0.70 76.12 0.68 73.55 0.66 76.90 0.71 76.62 0.70 74.68 0.67 78.11 0.72
+Table 2 Classiﬁcation Accuracy (%) and Cohen’s Kappa ( κ) for BCIC-IV -2b Dataset
+Subject EEGNet ShallowNet DeepConvNet TCANet ATCNet TCNet Fusion SecNet MCSANet
+Acc(%) κ Acc(%) κ Acc(%) κ Acc(%) κ Acc(%) κ Acc(%) κ Acc(%) κ Acc(%) κ
+sub 1 70.05 0.41 66.92 0.35 69.35 0.35 71.52 0.42 73.63 0.47 73.62 0.47 72.38 0.50 72.76 0.46
+sub 2 67.82 0.36 63.03 0.26 66.79 0.34 66.89 0.33 66.50 0.33 68.29 0.37 61.11 0.40 69.39 0.39
+sub 3 84.16 0.68 78.92 0.58 82.49 0.65 83.19 0.66 81.75 0.64 82.69 0.65 84.10 0.69 83.73 0.67
+sub 4 97.30 0.95 96.54 0.93 94.32 0.89 96.57 0.93 96.13 0.92 96.37 0.93 95.38 0.91 96.27 0.93
+sub 5 93.73 0.87 90.86 0.82 86.92 0.74 87.52 0.75 92.25 0.85 95.44 0.91 93.29 0.82 95.03 0.90
+sub 6 81.35 0.63 84.86 0.70 77.30 0.55 82.66 0.65 85.31 0.71 83.69 0.67 84.29 0.65 85.46 0.71
+sub 7 89.46 0.79 87.41 0.75 86.11 0.72 91.57 0.83 89.63 0.79 88.44 0.77 90.95 0.83 89.41 0.79
+sub 8 93.68 0.87 90.86 0.82 89.89 0.80 95.57 0.91 91.56 0.83 92.81 0.86 92.05 0.81 91.95 0.84
+sub 9 83.95 0.68 84.97 0.70 76.92 0.54 82.01 0.64 83.63 0.67 80.50 0.64 85.57 0.72 86.00 0.72
+A verage 84.61 0.69 82.71 0.66 81.13 0.63 84.17 0.68 84.48 0.70 84.65 0.70 84.37 0.70 85.56 0.72
+3 Results and discussion
+We evaluated the performance of the proposed MCSANet
+model using two key metrics: classiﬁcation accuracy and
+Cohen’s kappa score. MCSANet is compared against several
+state-of-the-art models, including EEGNet [5], ShallowCon-
+vNet and DeepConvNet [ 6], TCANet [ 15], TCNet Fusion
+[17], and A TCNet [3].
+3.1 Training setup
+MCSANet was evaluated using a 5-fold cross-validation
+scheme under both subject-dependent and subject-
+independent settings. In the subject-dependent setup incor-
+porating a hold-out session analysis, data from each sub-
+ject’s training session were used for training, while data
+from their corresponding evaluation session were used for
+testing, following the original dataset protocol. For the
+subject-independent setup, we adopted a leave-one-subject-
+out (LOSO) approach, from a total of n subjects, data
+from n − 1 subjects were used for training, and the one
+subject was used for testing. This process was repeated
+n times, each time leaving out a different subject for
+evaluation.
+The model was trained using the Glorot uniform initial-
+izer for weight initialization and the Adam optimizer with
+a learning rate of 0.001. Training was conducted with a
+batch size of 16 using categorical cross-entropy loss over
+300 epochs. These hyperparameters were ﬁne-tuned through
+multiple experiments to enhance generalization. Table S2
+summarizes the hyperparameter search procedure. To ensure
+fair comparison, the same training setup was applied to all
+state-of-the-art models evaluated.
+3.2 Performance analysis
+To comprehensively evaluate the performance of MCSANet,
+we employed two experimental setups: (1) subject-dependent
+and (2) subject-independent, each utilizing a 5-fold cross-
+validation scheme across all datasets (BCIC-IV -2a, BCIC-
+123
+--- PAGE 7 ---
+Signal, Image and Video Processing           (2026) 20:190 Page 7 of 11   190 
+Fig. 4 Confusion matrices of the MCSANet model on ( a) BCIC-IV -2a
+and (b) BCIC-IV -2b datasets
+IV -2b, and OpenBMI [22]; OpenBMI results are provided in
+the supplementary sheet).
+3.2.1 Subject-Dependent evaluation
+Tables 1 and 2 present subject-wise classiﬁcation accura-
+cies and kappa scores achieved by MCSANet and various
+state-of-the-art models on the BCIC-IV -2a and BCIC-IV -2b
+datasets, respectively. On the BCIC-IV -2a dataset, MCSANet
+achieved an average accuracy of 78.11% and a kappa score of
+0.72, with Subject 3 attaining the highest accuracy of 91.28%.
+On the BCIC-IV -2b dataset, MCSANet reached an average
+accuracy of 85.56% and a kappa score of 0.72, with Subject
+4 achieving the best accuracy of 96.27%.
+In addition to subject-wise results, Fig. 4 presents class-
+wise confusion matrices, offering insights into the model’s
+robustness across different MI tasks. For instance, MCSANet
+achieved 81% accuracy on the “right hand” class in the 2a
+dataset and 87% accuracy on the “left hand” class in the 2b
+dataset, indicating strong class-speciﬁc generalization.
+3.2.2 Subject-Independent evaluation
+Table 3 summarizes the overall classiﬁcation performance
+of MCSANet and baseline models under both evaluation
+schemes across the BCIC-IV -2a and BCIC-IV -2b datasets.
+Under the subject-independent evaluation, MCSANet
+achieved an average accuracy of 63.21% on the BCIC-IV -
+2a dataset and 78.52% on the BCIC-IV -2b dataset.
+Statistical analysis p < 0.05. indicates that MCSANet
+signiﬁcantly outperforms EEGNet, DeepConvNet, and
+TCANet on the BCIC-IV -2a dataset. Similarly, on the BCIC-
+IV -2b dataset, it outperforms ShallowNet, DeepConvNet,
+and A TCNet, demonstrating its robust generalization across
+both evaluation schemes and datasets. Although MCSANet
+did not surpass TCNet Fusion in the independent setup for
+the 2b dataset, it performed well on other datasets for both
+setups, showing no major impact on overall performance.
+Table 3 Comparative Classiﬁcation Accuracies (Mean ± STD) in % for Subject-Dependent (SD) and Subject-Independent (SI) Analyses on BCIC-IV -2a and 2b Datasets
+Dataset Setup EEGNet ShallowNet DeepConvNet TCANet TCNet Fusion ATCNet SecNet MCSAxNet
+BCIC-IV -2a SD 76.09 ± 10.29** 77.41 ± 10.12 76.12 ± 9.21** 73.55 ± 10.06** 76.62 ± 9.76 76.90 ± 9.97 74.68 ± 9.37** 78.11 ± 9.53
+SI 62.35 ± 13.21 61.19 ± 13.37** 52.21 ± 9.76** 59.24 ± 8.07** 61.78 ± 12.21** 62.43 ± 10.56 60.95 ± 10.11 63.21 ± 14.88
+BCIC-IV -2b SD 84.61 ± 9.75 82.71 ± 10.58** 81.13 ± 8.74** 84.17 ± 9.52** 84.65 ± 9.10 84.01 ± 8.96** 84.37±10.49 85.56 ± 8.75
+SI 77.92 ± 6.96 75.86 ± 8.06** 61.23 ± 11.25** 76.22 ± 10.14** 79.58 ± 8.54 76.61 ± 6.01 76.02 ± 7.72 78.52 ± 7.17
+Note: Bold values highlight the MCSANet results. The ** indicates that the decoding accuracies of MCSANet are signiﬁcantly higher than those of the compared methods with p < 0.05
+123
+--- PAGE 8 ---
+  190 Page 8 of 11 Signal, Image and Video Processing           (2026) 20:190 
+Table 4 Comparison of Accuracy and Kappa Score Across Different Models on Two Datasets With and Without Data Augmentation (DA)
+Dataset DA MCSANet SecNet ATCNet EEGNet ShallowNet DeepNet TCANet TCNet Fusion
+BCIC-IV -2a W/o DA 73.74 / 0.68 72.66 / 0.66 76.17 / 0.71 70.71 / 0.61 72.78 / 0.64 68.68 / 0.58 72.52 / 0.63 72.17 / 0.63
+With DA 78.11 / 0.72 74.68 / 0.67 76.90 / 0.71 76.09 / 0.69 77.41 / 0.70 76.12 / 0.68 73.55 / 0.66 76.62 / 0.70
+With S&R 76.83 / 0.71 73.22 / 0.67 77.38 / 0.71 74.73 / 0.66 75.26 / 0.68 74.94 / 0.66 73.12 / 0.66 75.38 / 0.66
+BCIC-IV -2b W/o DA 83.23 / 0.69 81.17 / 0.66 83.84 / 0.69 80.81 / 0.65 81.06 / 0.67 80.57 / 0.64 82.89 / 0.66 83.53 / 0.69
+With DA 85.56 / 0.72 84.37 / 0.70 84.48 / 0.70 84.61 / 0.69 82.71 / 0.66 81.13 / 0.65 84.17 / 0.68 84.65 / 0.70
+With S&R 86.35 / 0.73 82.13 / 0.66 85.40 / 0.71 85.69 / 0.72 82.44 / 0.65 81.36 / 0.65 80.17 / 0.64 85.46 / 0.71
+The bold values signiﬁes the maximum accuracy
+Table 5 Average Test Accuracy (%) for Different Segment and New
+Trial V alues on BCIC-IV -2a and 2b
+Segments New Trials BCIC-IV -2a BCIC-IV -2b
+Accuracy(%) Accuracy (%)
+4 100 77.47 85.76
+4 200 78.11 85.56
+4 400 77.08 84.76
+8 100 77.33 81.52
+8 200 77.24 85.04
+8 400 76.13 85.44
+The bold values signiﬁes the maximum accuracy
+3.3 Impact of data augmentation
+To evaluate the effectiveness of TSS-based data augmenta-
+tion (DA) on the performance of MCSANet, we conducted
+a comparative analysis of classiﬁcation results with and
+without DA, as shown in Table 4, alongside various state-of-
+the-art models. The results clearly indicate that the absence
+of data augmentation causes a noticeable decline in per-
+formance across all evaluated models. Despite this decline,
+MCSANet continues to outperform most models, except for
+A TCNet. However, when DA is applied, MCSANet surpasses
+all state-of-the-art models, including A TCNet. Speciﬁcally,
+the inclusion of DA yields an approximate 5% improve-
+ment in accuracy, highlighting its signiﬁcant contribution to
+enhancing classiﬁcation performance. To evaluate the effec-
+tiveness of TSS, we also compared it with another data
+augmentation approach, S&R. The results indicate that TSS
+produces statistically similar results to S&R.
+3.4 Impact of trail segmentation
+In the TSS, as discussed in Section III-B, we select 4 random
+trials (denoted as X1, X2, X3, and X4) to ensure a good bal-
+ance between randomness and uniqueness in the generated
+data. The number of new trials Xnew can be large, depending
+on how many combinations are made. Also, each trial can
+be divided into several segments, necessitating a multiple of
+4 (selected trials). So, both segmentation and the number of
+new trials are important in the DA process.
+To analyze the impact of new trail generation on test
+accuracy, we compare the proposed model MCSANet, in
+terms of both segment selection and new trail generation.
+Table 5 presents a comparison of the output based on these
+two factors, highlighting their inﬂuence on model perfor-
+mance. As a result, we increased the number of newly
+generated trials, but this did not lead to improved accu-
+racy. This might happen because adding too much synthetic
+data gives fewer useful features and can even add noise
+or repeated information. Similarly, while larger segmen-
+tation increases data variability, it also introduces more
+randomness and may fail to capture the interactions between
+features at different scales, ultimately leading to a decrease in
+accuracy.
+Considering both datasets, the number of newly generated
+trials impacted model performance differently. For the BCI-
+IV -2a dataset, generating 200 new trials yielded the highest
+accuracy, whereas for the BCI-IV -2b dataset, the best results
+were achieved with 100 new trials. However, to maintain
+consistency and support the concept of generalizability, we
+adopted a uniform strategy: selecting 4 segments and gen-
+erating 200 new trials across all state-of-the-art techniques
+evaluated in this study.
+3.5 Impact of attention parameters
+In multi-head attention, both the number of heads and key-
+dim impact performance. The key dim deﬁnes the projection
+size of each attention head, inﬂuencing feature extraction.
+While more heads can improve accuracy, they also increase
+complexity and the risk of overﬁtting. Selecting the right
+balance between the number of heads and key-dim is crucial
+for optimal performance. The Fig. 5 illustrates different con-
+ﬁgurations, highlighting the best-performing settings. Since
+the depth of the attention mechanism plays a crucial role,
+after selecting the number of heads and key dimensions,
+we conducted experiments to evaluate the effectiveness of
+the depth parameter in the proposed architecture. The Fig.
+123
+--- PAGE 9 ---
+Signal, Image and Video Processing           (2026) 20:190 Page 9 of 11   190 
+Fig. 5 Test accuracy with respect to the number of multi-head self-
+attention parameters (Key Dimension, Number of Heads)
+Fig. 6 Test accuracy with respect to the number of multi-head self-
+attention parameters (depth)
+6 illustrates different conﬁgurations, highlighting the best-
+performing settings.
+3.6 Impact of multi-scale feature extraction
+The multi-scale temporal convolutional in MCSANet serves
+as the core local feature extractor, where the number of lay-
+ers and ﬁlters strongly affects decoding performance. While
+deeper scaling can enrich temporal features, excessive layers
+risk overﬁtting by learning redundant patterns. To determine
+the optimal conﬁguration, we performed a hold-out session
+analysis on the BCIC-IV -2a dataset. Each temporal layer used
+F1 ﬁlters for compatibility with MHSA, and four depth set-
+tings were tested: 1 layer [31], 2 layers [31, 63], 3 layers
+[31, 63, 125], and 4 layers [15, 31, 63, 125]. The results
+(Fig. 7) show that increasing the temporal depth improves
+Fig. 7 Classiﬁcation accuracies (%) for different numbers of temporal
+layer branches and ﬁlters in session-independent analysis on the BCIC-
+IV -2a dataset
+Fig. 8 Test accuracy across different model variants
+performance up to a point, but excessive layers and ﬁlters
+eventually degrade the accuracy.
+3.7 Impact of different layers
+We performed a parametric sensitivity analysis by creat-
+ing architecture variants through systematic layer removal
+to assess their impact on accuracy, using the BCIC-IV -2a
+and BCIC-IV -2b datasets (Fig.8).
+MCSANet-WSC: Removing the depthwise convolution
+causes the largest decline (26.99% on 2a; 8.46% on 2b), con-
+ﬁrming the critical role of spatial ﬁltering.
+MCSANet-WTC: Removing the ﬁnal temporal convolu-
+tion leads to a moderate drop (3.36% on 2a; 3.93% on 2b),
+indicating its supportive role in feature extraction.
+123
+--- PAGE 10 ---
+  190 Page 10 of 11 Signal, Image and Video Processing           (2026) 20:190 
+Fig. 9 t-SNE visualizations of the features from the classiﬁcation layer in the subject-dependent experiment of the ﬁrst fold for subject 3 on the
+BCIC-IV -2a dataset
+MCSANet-WP: This variant removes the average pool-
+ing layers, which are responsible for downsampling feature
+maps and reducing dimensionality. The ﬁrst pooling layer
+(MCSANet-WPC) after depthwise convolution shows a
+larger impact (accuracy drop of 4.44% on 2a; 1.05% on 2b),
+while the second pooling layer (W AP) leads to a slightly
+smaller decline (3.75% on 2a; 0.82% on 2b). This conﬁrms
+both are important, though the ﬁrst pooling layer is more
+critical.
+MCSANet-W A: This variant removes the attention mech-
+anism, which enhances feature representation using self-
+attention. The MCSANet-W A variant shows 2.45% on 2a;
+3.59% on 2b, a drop in average test accuracy, indicating that
+the attention mechanism plays a crucial role in improving MI-
+EEG classiﬁcation. We have also included the corresponding
+statistical test results in Table S3 of the Supplementary Mate-
+rial.
+MCSANet-WCB: This variant removes the ﬁrst multi-
+scale temporal convolutional layer Conv2D(31,1),
+Conv2D(63,1), and Conv2D(125,1), which are responsible
+for extracting low-level temporal features. The results show
+a (3.05% on 2a; 7.34% on 2b) drop in accuracy, highlighting
+the importance of multiscale feature extraction in the pro-
+posed model.
+MCSANet-WD: Without dropout has a negligible impact
+(0.13% on 2a; 3.30% on 2b), conﬁrming its role as a stabilizer
+rather than a major accuracy driver.
+3.8 Visualization of learned feature representations
+To evaluate the contribution of each component within the
+proposed MCSANet architecture, we perform a layer-wise
+t-SNE analysis, as shown in Fig. 9. The raw EEG input (Fig.
+9(a)) exhibits random, overlapping class distributions. After
+the multiscale temporal convolutional layer (Fig. 9), initial
+clustering appears, though class separability remains lim-
+ited. Incorporating both temporal and spatial features (Fig.
+9(c))signiﬁcantly improves inter-class separation. The inclu-
+sion of separable convolutions (Fig. 9(d)) further enhances
+this effect. After the self-attention module, the ﬁnal output
+of the complete MCSANet model (Fig. 9(e)) demonstrates
+the most distinct and compact class-wise feature clusters,
+conﬁrming the effectiveness of the full architecture.
+4 Conclusion
+This work introduces MCSANet, a novel DL model that
+integrates a multi-scale temporal convolutional layer with
+an attention mechanism and novel data augmentation tech-
+niques TSS to enhance MI-EEG classiﬁcation. A compar-
+ative evaluation against state-of-the-art DL models, viz.,
+EEGNet, ShallowConvNet, DeepConvNet, TCANet, TCNet
+Fusion, A TCNet, and SecNet demonstrate that MCSANet
+consistently outperforms these models across both datasets.
+MCSANet achieves accuracies of 78.11% and 85.56%, with
+kappa scores of 0.72 for both, on the BCI Competition IV -
+2a and IV -2b datasets, respectively. The proposed TSS-based
+data augmentation enhances the performance of all evaluated
+models, conﬁrming its effectiveness in improving MI-EEG
+signal classiﬁcation accuracy. Notably, MCSANet exhibits a
+5.89% increase in accuracy with TSS. In addition, an abla-
+tion analysis of different network components shows that the
+attention mechanism improves classiﬁcation performance.
+The above results underscore the robustness and reliability of
+MCSANet, making it more suitable for practical BCI appli-
+cations.
+In future work, we plan to explore alternative strategies
+focused on generating synthetic data, aiming to improve the
+model’s ability to learn underlying patterns and enhance its
+generalizability.
+Supplementary Information The online version contains supplemen-
+tary material available at https://doi.org/10.1007/s11760-026-05232-
+6.
+Author Contributions S.D. wrote the manuscript, developed the method-
+ology, and implemented the code. K.S. reviewed the script and provided
+feedback. N.S. and M.K.S. supervised the research and provided overall
+guidance.
+Funding No funds, grants, or other support were received for the prepa-
+ration of this research work.
+123
+--- PAGE 11 ---
+Signal, Image and Video Processing           (2026) 20:190 Page 11 of 11   190 
+Data Availability No datasets were generated or analysed during the
+current study.
+Declarations
+Competing interests The authors declare no competing interests.
+References
+1. Long, J., Li, Y ., Wang, H., Y u, T., Pan, J., Li, F.: A hybrid brain
+computer interface to control the direction and speed of a simulated
+or real wheelchair. IEEE Trans. Neural Syst. Rehabil. Eng. 20(5),
+720–729 (2012)
+2. Bi, L., Fan, X.-A., Liu, Y .: Eeg-based brain-controlled mobile
+robots: a survey. IEEE transactions on human-machine systems
+43(2), 161–176 (2013)
+3. Altaheri, H., Muhammad, G., Alsulaiman, M.: Physics-informed
+attention temporal convolutional network for eeg-based motor
+imagery classiﬁcation. IEEE Trans. Industr. Inf. 19(2), 2249–2258
+(2022)
+4. Song, Y ., Zheng, Q., Liu, B., Gao, X.: Eeg conformer: Convolu-
+tional transformer for eeg decoding and visualization. IEEE Trans.
+Neural Syst. Rehabil. Eng. 31, 710–719 (2022)
+5. Lawhern, V .J., Solon, A.J., Waytowich, N.R., Gordon, S.M., Hung,
+C.P ., Lance, B.J.: Eegnet: a compact convolutional neural net-
+work for eeg-based brain-computer interfaces. J. Neural Eng.15(5),
+056013 (2018)
+6. Schirrmeister, R.T., Springenberg, J.T., Fiederer, L.D.J., Glasstet-
+ter, M., Eggensperger, K., Tangermann, M., Hutter, F., Burgard, W.,
+Ball, T.: Deep learning with convolutional neural networks for eeg
+decoding and visualization. Hum. Brain Mapp. 38(11), 5391–5420
+(2017)
+7. Liu, K., Y ang, M., Y u, Z., Wang, G., Wu, W.: Fbmsnet: A ﬁlter-
+bank multi-scale convolutional neural network for eeg-based motor
+imagery decoding. IEEE Trans. Biomed. Eng. 70(2), 436–445
+(2022)
+8. Wang, J., Y ao, L., Wang, Y .: Ifnet: An interactive frequency con-
+volutional neural network for enhancing motor imagery decoding
+from eeg. IEEE Trans. Neural Syst. Rehabil. Eng. 31, 1900–1911
+(2023)
+9. Mane, R., Chew, E., Chua, K., Ang, K.K., Robinson, N., Vinod,
+A.P ., Lee, S.-W., Guan, C.: Fbcnet: A multi-view convolu-
+tional neural network for brain-computer interface. arXiv preprint
+arXiv:2104.01233 (2021)
+10. Wang, J., Cheng, S., Tian, J., Gao, Y .: A 2d cnn-lstm hybrid algo-
+rithm using time series segments of eeg data for motor imagery
+classiﬁcation. Biomed. Signal Process. Control 83, 104627 (2023)
+11. Zhao, W., Jiang, X., Zhang, B., Xiao, S., Weng, S.: Ctnet: a
+convolutional transformer network for eeg-based motor imagery
+classiﬁcation. Sci. Rep. 14(1), 20237 (2024)
+12. Li, Q., Zhang, T., Chen, C.P ., Zhang, X., Hu, B.: Dgc-link: Dual-
+gate chebyshev linkage network on eeg emotion recognition. IEEE
+Transactions on Affective Computing (2025)
+13. Zhao, W., Zhang, B., Zhou, H., Wei, D., Huang, C., Lan, Q.: Multi-
+scale convolutional transformer network for motor imagery brain-
+computer interface. Sci. Rep. 15(1), 12935 (2025)
+14. Liu, X., Xiong, S., Wang, X., Liang, T., Wang, H., Liu, X.: A com-
+pact multi-branch 1d convolutional neural network for eeg-based
+motor imagery classiﬁcation. Biomed. Signal Process. Control 81,
+104456 (2023)
+15. Zhao, W., Lu, H., Zhang, B., Zheng, X., Wang, W., Zhou, H.:
+Tcanet: a temporal convolutional attention network for motor
+imagery eeg decoding. Cogn. Neurodyn. 19(1), 91 (2025)
+16. Liang, W., Allison, B.Z., Xu, R., He, X., Wang, X., Cichocki, A.,
+Jin, J.: Secnet: A second order neural network for mi-eeg. Journal
+Information Processing & Management 62(3), 104012 (2025)
+17. Musallam, Y .K., AlFassam, N.I., Muhammad, G., Amin, S.U.,
+Alsulaiman, M., Abdul, W., Altaheri, H., Bencherif, M.A., Algabri,
+M.: Electroencephalography-based motor imagery classiﬁcation
+using temporal convolutional network fusion. Biomed. Signal Pro-
+cess. Control 69, 102826 (2021)
+18. Brunner, C., Leeb, R., Müller-Putz, G., Schlögl, A., Pfurtscheller,
+G.: Bci competition 2008-graz data set a. Institute for knowledge
+discovery (laboratory of brain-computer interfaces). Graz Univer-
+sity of Technology 16, 1–6 (2008)
+19. Leeb, R., Brunner, C., Müller-Putz, G., Schlögl, A., Pfurtscheller,
+G.: Bci competition 2008-graz data set b. Graz University of Tech-
+nology, Austria 16, 1–6 (2008)
+20. Lotte, F.: Signal processing approaches to minimize or suppress
+calibration time in oscillatory activity-based brain-computer inter-
+faces. Proc. IEEE 103(6), 871–890 (2015)
+21. V aswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L.,
+Gomez, A.N., Kaiser, Ł., Polosukhin, I.: Attention is all you need.
+Advances in neural information processing systems 30 (2017)
+22. Lee, M.-H., Kwon, O.-Y ., Kim, Y .-J., Kim, H.-K., Lee, Y .-E.,
+Williamson, J., Fazli, S., Lee, S.-W.: Eeg dataset and openbmi
+toolbox for three bci paradigms: An investigation into bci illiteracy.
+GigaScience 8(5), 002 (2019)
+Publisher’s Note Springer Nature remains neutral with regard to juris-
+dictional claims in published maps and institutional afﬁliations.
+Springer Nature or its licensor (e.g. a society or other partner) holds
+exclusive rights to this article under a publishing agreement with the
+author(s) or other rightsholder(s); author self-archiving of the accepted
+manuscript version of this article is solely governed by the terms of such
+publishing agreement and applicable law.
+123

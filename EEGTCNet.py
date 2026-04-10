@@ -153,7 +153,7 @@ def EEGTCNet(n_classes, Chans=3, Samples=1000, layers=2, kernel_s=4, filt=12,
     return Model(inputs=input1, outputs=out)
 
 
-def run_eegtcnet_cv(X, y, groups, config, n_splits=10, epochs=80, batch_size=16, learning_rate=1e-3):
+def run_eegtcnet_cv(X, y, groups, config, n_splits=10, epochs=80, batch_size=16, learning_rate=5e-4):
     X, y = prepare_input(X, y)
     splits = make_cv_splits(X, y, config=config, groups=groups, n_splits=n_splits)
 
@@ -232,7 +232,7 @@ def run_eegtcnet_cv(X, y, groups, config, n_splits=10, epochs=80, batch_size=16,
 
 
 if __name__ == "__main__":
-    files = get_training_files("data")
+    files = get_training_files("data/2b")
     config = PreprocessingConfig(A=1, B=2, C=1, D=2)
 
     print("Running EEGTCNet experiment with config:", config)
