@@ -222,7 +222,7 @@ def ATCNet(n_classes, in_chans=3, in_samples=1000, n_windows=5,
     return Model(inputs=input_1, outputs=out)
 
 
-def run_atcnet_cv(X, y, groups, config, n_splits=10, epochs=100, batch_size=16, learning_rate=1e-3):
+def run_atcnet_cv(X, y, groups, config, n_splits=10, epochs=100, batch_size=16, learning_rate=5e-4):
     X, y = prepare_input(X, y)
     splits = make_cv_splits(X, y, config=config, groups=groups, n_splits=n_splits)
 

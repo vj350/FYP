@@ -94,13 +94,13 @@ def run_model(name, X, y, groups, config, n_splits):
     elif name == "eegnet":
         return run_eegnet_cv(
             X, y, groups, config, n_splits=n_splits,
-            epochs=50, batch_size=16, learning_rate=1e-3
+            epochs=50, batch_size=16, learning_rate=5e-4
         )
 
     elif name == "deepconv":
         return run_deepconvnet_cv(
             X, y, groups, config, n_splits=n_splits,
-            epochs=50, batch_size=16, learning_rate=1e-3
+            epochs=50, batch_size=16, learning_rate=5e-4
         )
 
     elif name == "shallowconv":
@@ -112,13 +112,13 @@ def run_model(name, X, y, groups, config, n_splits):
     elif name == "eegtcnet":
         return run_eegtcnet_cv(
             X, y, groups, config, n_splits=n_splits,
-            epochs=80, batch_size=16, learning_rate=1e-3
+            epochs=80, batch_size=16, learning_rate=5e-4
         )
 
     elif name == "atcnet":
         return run_atcnet_cv(
             X, y, groups, config, n_splits=n_splits,
-            epochs=100, batch_size=16, learning_rate=1e-3
+            epochs=100, batch_size=16, learning_rate=5e-4
         )
 
     else:

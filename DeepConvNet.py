@@ -42,7 +42,7 @@ def run_deepconvnet_cv(
     n_splits=10,
     epochs=50,
     batch_size=16,
-    learning_rate=1e-3,
+    learning_rate=5e-4,
 ):
     """
     Run DeepConvNet with cross-validation using the same split logic
@@ -73,7 +73,7 @@ def run_deepconvnet_cv(
             nb_classes=n_classes,
             Chans=n_channels,
             Samples=n_samples,
-            dropoutRate=0.5,
+            dropoutRate=0.25,
         )
 
         model.compile(
