@@ -78,18 +78,21 @@ def conv_block_atc(input_layer, F1=16, kernLength=32, poolSize=7, D=2, in_chans=
     return x
 
 
-def mha_block(x, num_heads=2, key_dim=8, dropout=0.1):
+def mha_block(x, num_heads=2, key_dim=8, dropout=0.5):
     """
-    Simple self-attention block.
+    Multi-head self-attention block matching the ATCNet reference implementation.
+    Pre-norm order: LayerNorm -> MHA -> residual Add
     Input shape: (None, seq_len, features)
     """
+    # Pre-norm (LayerNorm before attention — matches reference repo)
+    x_norm = LayerNormalization(epsilon=1e-6)(x)
     attn_out = MultiHeadAttention(
         num_heads=num_heads,
         key_dim=key_dim,
         dropout=dropout
-    )(x, x)
+    )(x_norm, x_norm)
+    # Residual add
     x = Add()([x, attn_out])
-    x = LayerNormalization()(x)
     return x
 
 
