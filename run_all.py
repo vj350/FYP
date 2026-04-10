@@ -118,7 +118,7 @@ def run_model(name, X, y, groups, config, n_splits):
     elif name == "atcnet":
         return run_atcnet_cv(
             X, y, groups, config, n_splits=n_splits,
-            epochs=100, batch_size=16, learning_rate=5e-4
+            epochs=100, batch_size=16, learning_rate=1e-3
         )
 
     else:
