@@ -73,7 +73,7 @@ def run_deepconvnet_cv(
             nb_classes=n_classes,
             Chans=n_channels,
             Samples=n_samples,
-            dropoutRate=0.25,
+            dropoutRate=0.5,
         )
 
         model.compile(

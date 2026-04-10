@@ -73,11 +73,11 @@ def run_eegnet_cv(
             nb_classes=n_classes,
             Chans=n_channels,
             Samples=n_samples,
-            dropoutRate=0.25,
+            dropoutRate=0.5,
             kernLength=64,
-            F1=16,
+            F1=8,
             D=2,
-            F2=32,
+            F2=16,
             norm_rate=0.25,
             dropoutType='Dropout'
         )

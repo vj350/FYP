@@ -126,7 +126,7 @@ def run_csp_svm_cv(X, y, groups, config, n_splits=10, n_csp_components=2):
         X_train_features = csp.fit_transform(X_train, y_train)
         X_test_features = csp.transform(X_test)
 
-        clf = SVC(kernel="linear", C=10.0)
+        clf = SVC(kernel="linear")
 
         start = time.time()
         clf.fit(X_train_features, y_train)
@@ -151,7 +151,7 @@ def run_fbcsp_svm_cv(
     groups,
     config,
     n_splits=10,
-    n_csp_components=4,
+    n_csp_components=2,
     fs=250,
     k_features=8,
 ):
@@ -210,7 +210,7 @@ def run_fbcsp_svm_cv(
             X_train_features, y_train, X_test_features, k_use
         )
 
-        clf = SVC(kernel="linear", C=10.0)
+        clf = SVC(kernel="linear")
 
         start = time.time()
         clf.fit(X_train_sel, y_train)
