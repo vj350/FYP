@@ -225,21 +225,39 @@ def prepare_n1ct(X, y):
 def dl_split(X, y, groups, test_size=0.2, random_state=42):
     """
     Train/val split that respects groups (no trial leakage).
-    If groups is None, use plain random split.
+    If groups is None, use plain stratified random split.
     """
     if groups is None:
         return train_test_split(X, y, test_size=test_size,
                                 random_state=random_state, stratify=y)
 
-    # Group-aware split: hold out last ~20% of unique trial IDs
+    # Group-aware split: shuffle unique trial IDs then hold out last ~20%
     unique_groups = np.unique(groups)
-    n_val = max(1, int(len(unique_groups) * test_size))
-    val_groups = unique_groups[-n_val:]
+    rng = np.random.default_rng(random_state)
+    shuffled = rng.permutation(unique_groups)
+    n_val = max(1, int(len(shuffled) * test_size))
+    val_groups = shuffled[-n_val:]
 
     val_mask = np.isin(groups, val_groups)
     train_mask = ~val_mask
 
     return X[train_mask], X[val_mask], y[train_mask], y[val_mask]
+
+
+def dl_eval_seeds(build_model_fn, X, y, groups, epochs, batch_size, lr,
+                  patience=10, seeds=(0, 1, 2)):
+    """
+    Evaluate one hyperparameter config across multiple seeds.
+    Returns (mean_acc, std_acc) — more reliable than a single split.
+    """
+    scores = []
+    for seed in seeds:
+        X_tr, X_val, y_tr, y_val = dl_split(X, y, groups, random_state=seed)
+        model = build_model_fn()
+        acc = dl_train_eval(model, X_tr, y_tr, X_val, y_val,
+                            epochs, batch_size, lr, patience)
+        scores.append(acc)
+    return float(np.mean(scores)), float(np.std(scores))
 
 
 # =========================
@@ -249,8 +267,6 @@ def tune_eegnet(X_raw, y, groups, epochs=50, batch_size=16):
     print("\n===== Tuning EEGNet =====")
 
     X, y = prepare_nct1(X_raw, y)
-    X_tr, X_val, y_tr, y_val = dl_split(X, y, groups)
-
     n_classes = len(np.unique(y))
     Chans, Samples = X.shape[1], X.shape[2]
 
@@ -264,18 +280,18 @@ def tune_eegnet(X_raw, y, groups, epochs=50, batch_size=16):
     best_score, best_params = -1, {}
 
     for params in param_grid:
-        model = EEGNet(
-            nb_classes=n_classes, Chans=Chans, Samples=Samples,
-            dropoutRate=params["dropoutRate"],
-            kernLength=params["kernLength"],
-            F1=params["F1"], D=2, F2=params["F1"] * 2,
-            norm_rate=0.25, dropoutType="Dropout",
-        )
-        acc = dl_train_eval(model, X_tr, y_tr, X_val, y_val,
-                            epochs, batch_size, params["learning_rate"])
-        print(f"  {params}  ->  {acc * 100:.2f}%")
-        if acc > best_score:
-            best_score, best_params = acc, params
+        def build(p=params):
+            return EEGNet(
+                nb_classes=n_classes, Chans=Chans, Samples=Samples,
+                dropoutRate=p["dropoutRate"], kernLength=p["kernLength"],
+                F1=p["F1"], D=2, F2=p["F1"] * 2,
+                norm_rate=0.25, dropoutType="Dropout",
+            )
+        mean_acc, std_acc = dl_eval_seeds(build, X, y, groups, epochs, batch_size,
+                                          params["learning_rate"])
+        print(f"  {params}  ->  mean={mean_acc * 100:.2f}%  std={std_acc * 100:.2f}%")
+        if mean_acc > best_score:
+            best_score, best_params = mean_acc, params
 
     print_best("EEGNet", best_params, best_score)
     return best_params, best_score
@@ -285,8 +301,6 @@ def tune_deepconvnet(X_raw, y, groups, epochs=50, batch_size=16):
     print("\n===== Tuning DeepConvNet =====")
 
     X, y = prepare_nct1(X_raw, y)
-    X_tr, X_val, y_tr, y_val = dl_split(X, y, groups)
-
     n_classes = len(np.unique(y))
     Chans, Samples = X.shape[1], X.shape[2]
 
@@ -298,15 +312,14 @@ def tune_deepconvnet(X_raw, y, groups, epochs=50, batch_size=16):
     best_score, best_params = -1, {}
 
     for params in param_grid:
-        model = DeepConvNet(
-            nb_classes=n_classes, Chans=Chans, Samples=Samples,
-            dropoutRate=params["dropoutRate"],
-        )
-        acc = dl_train_eval(model, X_tr, y_tr, X_val, y_val,
-                            epochs, batch_size, params["learning_rate"])
-        print(f"  {params}  ->  {acc * 100:.2f}%")
-        if acc > best_score:
-            best_score, best_params = acc, params
+        def build(p=params):
+            return DeepConvNet(nb_classes=n_classes, Chans=Chans, Samples=Samples,
+                               dropoutRate=p["dropoutRate"])
+        mean_acc, std_acc = dl_eval_seeds(build, X, y, groups, epochs, batch_size,
+                                          params["learning_rate"])
+        print(f"  {params}  ->  mean={mean_acc * 100:.2f}%  std={std_acc * 100:.2f}%")
+        if mean_acc > best_score:
+            best_score, best_params = mean_acc, params
 
     print_best("DeepConvNet", best_params, best_score)
     return best_params, best_score
@@ -316,8 +329,6 @@ def tune_shallowconvnet(X_raw, y, groups, epochs=50, batch_size=16):
     print("\n===== Tuning ShallowConvNet =====")
 
     X, y = prepare_nct1(X_raw, y)
-    X_tr, X_val, y_tr, y_val = dl_split(X, y, groups)
-
     n_classes = len(np.unique(y))
     Chans, Samples = X.shape[1], X.shape[2]
 
@@ -329,15 +340,14 @@ def tune_shallowconvnet(X_raw, y, groups, epochs=50, batch_size=16):
     best_score, best_params = -1, {}
 
     for params in param_grid:
-        model = ShallowConvNet(
-            nb_classes=n_classes, Chans=Chans, Samples=Samples,
-            dropoutRate=params["dropoutRate"],
-        )
-        acc = dl_train_eval(model, X_tr, y_tr, X_val, y_val,
-                            epochs, batch_size, params["learning_rate"])
-        print(f"  {params}  ->  {acc * 100:.2f}%")
-        if acc > best_score:
-            best_score, best_params = acc, params
+        def build(p=params):
+            return ShallowConvNet(nb_classes=n_classes, Chans=Chans, Samples=Samples,
+                                  dropoutRate=p["dropoutRate"])
+        mean_acc, std_acc = dl_eval_seeds(build, X, y, groups, epochs, batch_size,
+                                          params["learning_rate"])
+        print(f"  {params}  ->  mean={mean_acc * 100:.2f}%  std={std_acc * 100:.2f}%")
+        if mean_acc > best_score:
+            best_score, best_params = mean_acc, params
 
     print_best("ShallowConvNet", best_params, best_score)
     return best_params, best_score
@@ -347,8 +357,6 @@ def tune_eegtcnet(X_raw, y, groups, epochs=80, batch_size=16):
     print("\n===== Tuning EEG-TCNet =====")
 
     X, y = prepare_n1ct(X_raw, y)
-    X_tr, X_val, y_tr, y_val = dl_split(X, y, groups)
-
     n_classes = len(np.unique(y))
     Chans, Samples = X.shape[2], X.shape[3]
 
@@ -361,19 +369,17 @@ def tune_eegtcnet(X_raw, y, groups, epochs=80, batch_size=16):
     best_score, best_params = -1, {}
 
     for params in param_grid:
-        model = EEGTCNet(
-            n_classes=n_classes, Chans=Chans, Samples=Samples,
-            layers=2, kernel_s=4,
-            filt=params["filt"],
-            dropout=params["dropout"],
-            activation="elu", F1=8, D=2, kernLength=32, dropout_eeg=0.2,
-        )
-        acc = dl_train_eval(model, X_tr, y_tr, X_val, y_val,
-                            epochs, batch_size, params["learning_rate"],
-                            patience=12)
-        print(f"  {params}  ->  {acc * 100:.2f}%")
-        if acc > best_score:
-            best_score, best_params = acc, params
+        def build(p=params):
+            return EEGTCNet(
+                n_classes=n_classes, Chans=Chans, Samples=Samples,
+                layers=2, kernel_s=4, filt=p["filt"], dropout=p["dropout"],
+                activation="elu", F1=8, D=2, kernLength=32, dropout_eeg=0.2,
+            )
+        mean_acc, std_acc = dl_eval_seeds(build, X, y, groups, epochs, batch_size,
+                                          params["learning_rate"], patience=12)
+        print(f"  {params}  ->  mean={mean_acc * 100:.2f}%  std={std_acc * 100:.2f}%")
+        if mean_acc > best_score:
+            best_score, best_params = mean_acc, params
 
     print_best("EEG-TCNet", best_params, best_score)
     return best_params, best_score
@@ -383,8 +389,6 @@ def tune_atcnet(X_raw, y, groups, epochs=100, batch_size=16):
     print("\n===== Tuning ATCNet =====")
 
     X, y = prepare_n1ct(X_raw, y)
-    X_tr, X_val, y_tr, y_val = dl_split(X, y, groups)
-
     n_classes = len(np.unique(y))
     Chans, Samples = X.shape[2], X.shape[3]
 
@@ -397,21 +401,19 @@ def tune_atcnet(X_raw, y, groups, epochs=100, batch_size=16):
     best_score, best_params = -1, {}
 
     for params in param_grid:
-        model = ATCNet(
-            n_classes=n_classes, in_chans=Chans, in_samples=Samples,
-            n_windows=5,
-            eegn_F1=params["eegn_F1"], eegn_D=2,
-            eegn_kernelSize=64, eegn_poolSize=7, eegn_dropout=0.3,
-            tcn_depth=2, tcn_kernelSize=4,
-            tcn_filters=params["tcn_filters"],
-            tcn_dropout=0.3, tcn_activation="elu", fuse="average",
-        )
-        acc = dl_train_eval(model, X_tr, y_tr, X_val, y_val,
-                            epochs, batch_size, params["learning_rate"],
-                            patience=15)
-        print(f"  {params}  ->  {acc * 100:.2f}%")
-        if acc > best_score:
-            best_score, best_params = acc, params
+        def build(p=params):
+            return ATCNet(
+                n_classes=n_classes, in_chans=Chans, in_samples=Samples,
+                n_windows=5, eegn_F1=p["eegn_F1"], eegn_D=2,
+                eegn_kernelSize=64, eegn_poolSize=7, eegn_dropout=0.3,
+                tcn_depth=2, tcn_kernelSize=4, tcn_filters=p["tcn_filters"],
+                tcn_dropout=0.3, tcn_activation="elu", fuse="average",
+            )
+        mean_acc, std_acc = dl_eval_seeds(build, X, y, groups, epochs, batch_size,
+                                          params["learning_rate"], patience=15)
+        print(f"  {params}  ->  mean={mean_acc * 100:.2f}%  std={std_acc * 100:.2f}%")
+        if mean_acc > best_score:
+            best_score, best_params = mean_acc, params
 
     print_best("ATCNet", best_params, best_score)
     return best_params, best_score
