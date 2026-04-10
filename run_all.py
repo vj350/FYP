@@ -190,7 +190,7 @@ def main():
 
     config = parse_config_str(args.config)
 
-    files = get_training_files("data")
+    files = get_training_files("data/2b")
     print(f"Found {len(files)} subject files.")
     print(f"Config: {config}")
     print(f"Models: {args.models}")

@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh --version)",
+      "Bash(gh pr:*)",
+      "Bash(python tune_hyperparams.py --models eegnet deepconv shallowconv eegtcnet atcnet)",
+      "Bash(python tune_hyperparams.py)",
+      "Bash(python run_all.py)",
+      "WebSearch",
+      "WebFetch(domain:www.nature.com)",
+      "WebFetch(domain:pmc.ncbi.nlm.nih.gov)",
+      "WebFetch(domain:arxiv.org)",
+      "WebFetch(domain:link.springer.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:onlinelibrary.wiley.com)",
+      "Bash(python -c ':*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:www.bbci.de)",
+      "Bash(python ATCNet.py)",
+      "Bash(python tune_hyperparams.py --models atcnet)",
+      "Bash(pip show:*)",
+      "Bash(del mcsanet_text.txt)"
+    ]
+  }
+}

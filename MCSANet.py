@@ -32,6 +32,18 @@ def MCSANet(nb_classes, Chans=3, Samples=1000, F1=8, D=2, num_heads=2,
         network with data augmentation for motor imagery EEG classification.
         Signal, Image and Video Processing, 20:190.
 
+    NOTE FOR REPORT:
+        The paper proposes two separate contributions:
+          (1) MCSANet architecture — implemented here.
+          (2) Temporal Segment Shuffling (TSS) — a data augmentation strategy
+              that generates synthetic trials by recombining segments from 4
+              trials of the same class. TSS is NOT part of the model architecture;
+              it is applied to the training data before training.
+        TSS is intentionally excluded here to ensure a fair comparison with the
+        other models (EEGNet, DeepConvNet, ATCNet, etc.), none of which use
+        data augmentation. The paper reports ~2.8% accuracy gain from TSS on
+        Dataset 2b, so results here reflect the model architecture alone.
+
     Architecture:
         1. Convolutional Block:
            - Three parallel temporal Conv2D with kernels Fs/2, Fs/4, Fs/8
@@ -220,7 +232,7 @@ def run_mcsanet_cv(
 
 
 if __name__ == "__main__":
-    files = get_training_files("data")
+    files = get_training_files("data/2b")
 
     config = PreprocessingConfig(A=1, B=2, C=1, D=2)
 

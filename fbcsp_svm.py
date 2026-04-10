@@ -231,7 +231,7 @@ def run_fbcsp_svm_cv(
 
 
 if __name__ == "__main__":
-    files = get_training_files("data")
+    files = get_training_files("data/2b")
 
     # Change this for experiments
     config = PreprocessingConfig(A=1, B=2, C=1, D=2)

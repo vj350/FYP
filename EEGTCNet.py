@@ -232,7 +232,7 @@ def run_eegtcnet_cv(X, y, groups, config, n_splits=10, epochs=80, batch_size=16,
 
 
 if __name__ == "__main__":
-    files = get_training_files("data")
+    files = get_training_files("data/2b")
     config = PreprocessingConfig(A=1, B=2, C=1, D=2)
 
     print("Running EEGTCNet experiment with config:", config)

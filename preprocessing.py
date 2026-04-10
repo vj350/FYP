@@ -396,9 +396,10 @@ def preprocess_multiple_subjects(
 # =========================
 # Helpers
 # =========================
-def get_training_files(data_dir: str | Path) -> List[Path]:
+def get_training_files(data_dir: str | Path = "data/2b") -> List[Path]:
     """
     Return all B??T.mat files in sorted order.
+    Default points to data/2b/ (Dataset 2b).
     """
     data_dir = Path(data_dir)
     files = sorted(data_dir.glob("B??T.mat"))
@@ -411,7 +412,7 @@ def get_training_files(data_dir: str | Path) -> List[Path]:
 # Quick test
 # =========================
 if __name__ == "__main__":
-    data_dir = Path("data")
+    data_dir = Path("data/2b")
     files = get_training_files(data_dir)
 
     config = PreprocessingConfig(A=4, B=1, C=1, D=1)
