@@ -41,6 +41,7 @@ from DeepConvNet import run_deepconvnet_cv
 from ShallowConvNet import run_shallowconvnet_cv
 from EEGTCNet import run_eegtcnet_cv
 from ATCNet import run_atcnet_cv
+from MCSANet import run_mcsanet_cv
 
 
 # =========================
@@ -68,7 +69,7 @@ def parse_config_str(config_str: str) -> PreprocessingConfig:
 # =========================
 # Model registry
 # =========================
-ALL_MODELS = ["csp", "fbcsp", "eegnet", "deepconv", "shallowconv", "eegtcnet", "atcnet"]
+ALL_MODELS = ["csp", "fbcsp", "eegnet", "deepconv", "shallowconv", "eegtcnet", "atcnet", "mcsanet"]
 
 MODEL_DISPLAY = {
     "csp":          "CSP + SVM",
@@ -78,6 +79,7 @@ MODEL_DISPLAY = {
     "shallowconv":  "ShallowConvNet",
     "eegtcnet":     "EEG-TCNet",
     "atcnet":       "ATCNet",
+    "mcsanet":      "MCSANet",
 }
 
 
@@ -119,6 +121,12 @@ def run_model(name, X, y, groups, config, n_splits):
         return run_atcnet_cv(
             X, y, groups, config, n_splits=n_splits,
             epochs=100, batch_size=16, learning_rate=1e-3
+        )
+
+    elif name == "mcsanet":
+        return run_mcsanet_cv(
+            X, y, groups, config, n_splits=n_splits,
+            epochs=300, batch_size=16, learning_rate=1e-3
         )
 
     else:
