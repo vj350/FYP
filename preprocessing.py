@@ -408,6 +408,18 @@ def get_training_files(data_dir: str | Path = "data/2b") -> List[Path]:
     return files
 
 
+def get_evaluation_files(data_dir: str | Path = "data/2b") -> List[Path]:
+    """
+    Return all B??E.mat evaluation files in sorted order.
+    Used for the official T→E evaluation protocol on Dataset 2b.
+    """
+    data_dir = Path(data_dir)
+    files = sorted(data_dir.glob("B??E.mat"))
+    if not files:
+        raise FileNotFoundError(f"No evaluation files found in {data_dir}")
+    return files
+
+
 # =========================
 # Quick test
 # =========================

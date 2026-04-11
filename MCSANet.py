@@ -231,6 +231,34 @@ def run_mcsanet_cv(
     return accuracies, times
 
 
+def run_mcsanet_holdout(X_train, y_train, X_test, y_test,
+                        epochs=300, batch_size=16, learning_rate=1e-3):
+    """Train on X_train, evaluate on X_test (T→E protocol)."""
+    X_train, y_train = prepare_mcsanet_input(X_train, y_train)
+    X_test, y_test = prepare_mcsanet_input(X_test, y_test)
+
+    n_classes = len(np.unique(y_train))
+    n_channels = X_train.shape[1]
+    n_samples = X_train.shape[2]
+
+    model = MCSANet(nb_classes=n_classes, Chans=n_channels, Samples=n_samples,
+                    F1=8, D=2, num_heads=2, dropout_rate=0.5, Fs=250)
+    model.compile(loss='sparse_categorical_crossentropy',
+                  optimizer=Adam(learning_rate=learning_rate), metrics=['accuracy'])
+
+    early_stop = EarlyStopping(monitor='val_loss', patience=20,
+                               restore_best_weights=True, verbose=0)
+    start = time.time()
+    model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size,
+              validation_split=0.2, callbacks=[early_stop], verbose=0)
+    end = time.time()
+
+    y_pred = np.argmax(model.predict(X_test, verbose=0), axis=1)
+    acc = accuracy_score(y_test, y_pred)
+    print(f"MCSANet holdout accuracy: {acc:.4f}  time: {end-start:.1f}s")
+    return acc, end - start
+
+
 if __name__ == "__main__":
     files = get_training_files("data/2b")
 

@@ -230,6 +230,60 @@ def run_fbcsp_svm_cv(
     return accuracies, times
 
 
+def run_csp_svm_holdout(X_train, y_train, X_test, y_test, n_csp_components=2):
+    """Train on X_train, evaluate on X_test (T→E protocol)."""
+    X_train = np.transpose(X_train, (0, 2, 1))
+    X_test = np.transpose(X_test, (0, 2, 1))
+
+    csp = CSP(n_components=n_csp_components, log=True, norm_trace=False)
+    X_train_feat = csp.fit_transform(X_train, y_train)
+    X_test_feat = csp.transform(X_test)
+
+    clf = SVC(kernel="linear")
+    start = time.time()
+    clf.fit(X_train_feat, y_train)
+    end = time.time()
+
+    y_pred = clf.predict(X_test_feat)
+    acc = accuracy_score(y_test, y_pred)
+    print(f"CSP holdout accuracy: {acc:.4f}")
+    return acc, end - start
+
+
+def run_fbcsp_svm_holdout(X_train, y_train, X_test, y_test, config,
+                          n_csp_components=2, fs=250, k_features=8):
+    """Train on X_train, evaluate on X_test (T→E protocol)."""
+    X_train = np.transpose(X_train, (0, 2, 1))
+    X_test = np.transpose(X_test, (0, 2, 1))
+
+    bands = get_filter_bands(config)
+    train_feats, test_feats = [], []
+
+    for lowcut, highcut in bands:
+        X_tr_band = cheby2_bandpass_filter_epochs(X_train, lowcut, highcut, fs=fs)
+        X_te_band = cheby2_bandpass_filter_epochs(X_test, lowcut, highcut, fs=fs)
+
+        csp = CSP(n_components=n_csp_components, log=True, norm_trace=False)
+        train_feats.append(csp.fit_transform(X_tr_band, y_train))
+        test_feats.append(csp.transform(X_te_band))
+
+    X_train_all = np.concatenate(train_feats, axis=1)
+    X_test_all = np.concatenate(test_feats, axis=1)
+
+    k_use = min(k_features, X_train_all.shape[1])
+    X_train_sel, X_test_sel, _ = select_top_mibif_features(X_train_all, y_train, X_test_all, k_use)
+
+    clf = SVC(kernel="linear")
+    start = time.time()
+    clf.fit(X_train_sel, y_train)
+    end = time.time()
+
+    y_pred = clf.predict(X_test_sel)
+    acc = accuracy_score(y_test, y_pred)
+    print(f"FBCSP holdout accuracy: {acc:.4f}")
+    return acc, end - start
+
+
 if __name__ == "__main__":
     files = get_training_files("data/2b")
 
