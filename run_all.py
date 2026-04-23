@@ -40,8 +40,6 @@ from preprocessing_2a import (
     preprocess_subject_windows_2a,
     preprocess_multiple_subjects_2a,
 )
-from cross_validation import make_cv_splits
-
 from fbcsp_svm import run_csp_svm_cv, run_fbcsp_svm_cv, run_csp_svm_holdout, run_fbcsp_svm_holdout
 from EEGNet import run_eegnet_cv, run_eegnet_holdout
 from DeepConvNet import run_deepconvnet_cv, run_deepconvnet_holdout
