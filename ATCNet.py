@@ -78,18 +78,21 @@ def conv_block_atc(input_layer, F1=16, kernLength=32, poolSize=7, D=2, in_chans=
     return x
 
 
-def mha_block(x, num_heads=2, key_dim=8, dropout=0.1):
+def mha_block(x, num_heads=2, key_dim=8, dropout=0.5):
     """
-    Simple self-attention block.
+    Multi-head self-attention block matching the ATCNet reference implementation.
+    Pre-norm order: LayerNorm -> MHA -> residual Add
     Input shape: (None, seq_len, features)
     """
+    # Pre-norm (LayerNorm before attention — matches reference repo)
+    x_norm = LayerNormalization(epsilon=1e-6)(x)
     attn_out = MultiHeadAttention(
         num_heads=num_heads,
         key_dim=key_dim,
         dropout=dropout
-    )(x, x)
+    )(x_norm, x_norm)
+    # Residual add
     x = Add()([x, attn_out])
-    x = LayerNormalization()(x)
     return x
 
 
@@ -303,8 +306,39 @@ def run_atcnet_cv(X, y, groups, config, n_splits=10, epochs=100, batch_size=16, 
     return accuracies, times
 
 
+def run_atcnet_holdout(X_train, y_train, X_test, y_test,
+                       epochs=100, batch_size=16, learning_rate=1e-3):
+    """Train on X_train, evaluate on X_test (T→E protocol)."""
+    X_train, y_train = prepare_input(X_train, y_train)
+    X_test, y_test = prepare_input(X_test, y_test)
+
+    n_classes = len(np.unique(y_train))
+    n_channels = X_train.shape[2]
+    n_samples = X_train.shape[3]
+
+    model = ATCNet(n_classes=n_classes, in_chans=n_channels, in_samples=n_samples,
+                   n_windows=5, eegn_F1=16, eegn_D=2, eegn_kernelSize=64,
+                   eegn_poolSize=7, eegn_dropout=0.3, tcn_depth=2,
+                   tcn_kernelSize=4, tcn_filters=32, tcn_dropout=0.3,
+                   tcn_activation='elu', fuse='average')
+    model.compile(loss='sparse_categorical_crossentropy',
+                  optimizer=Adam(learning_rate=learning_rate), metrics=['accuracy'])
+
+    early_stop = EarlyStopping(monitor='val_loss', patience=15,
+                               restore_best_weights=True, verbose=0)
+    start = time.time()
+    model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size,
+              validation_split=0.2, callbacks=[early_stop], verbose=0)
+    end = time.time()
+
+    y_pred = np.argmax(model.predict(X_test, verbose=0), axis=1)
+    acc = accuracy_score(y_test, y_pred)
+    print(f"ATCNet holdout accuracy: {acc:.4f}  time: {end-start:.1f}s")
+    return acc, end - start
+
+
 if __name__ == "__main__":
-    files = get_training_files("data")
+    files = get_training_files("data/2b")
     config = PreprocessingConfig(A=1, B=2, C=1, D=2)
 
     print("Running ATCNet experiment with config:", config)

@@ -396,9 +396,10 @@ def preprocess_multiple_subjects(
 # =========================
 # Helpers
 # =========================
-def get_training_files(data_dir: str | Path) -> List[Path]:
+def get_training_files(data_dir: str | Path = "data/2b") -> List[Path]:
     """
     Return all B??T.mat files in sorted order.
+    Default points to data/2b/ (Dataset 2b).
     """
     data_dir = Path(data_dir)
     files = sorted(data_dir.glob("B??T.mat"))
@@ -407,11 +408,23 @@ def get_training_files(data_dir: str | Path) -> List[Path]:
     return files
 
 
+def get_evaluation_files(data_dir: str | Path = "data/2b") -> List[Path]:
+    """
+    Return all B??E.mat evaluation files in sorted order.
+    Used for the official T→E evaluation protocol on Dataset 2b.
+    """
+    data_dir = Path(data_dir)
+    files = sorted(data_dir.glob("B??E.mat"))
+    if not files:
+        raise FileNotFoundError(f"No evaluation files found in {data_dir}")
+    return files
+
+
 # =========================
 # Quick test
 # =========================
 if __name__ == "__main__":
-    data_dir = Path("data")
+    data_dir = Path("data/2b")
     files = get_training_files(data_dir)
 
     config = PreprocessingConfig(A=4, B=1, C=1, D=1)
