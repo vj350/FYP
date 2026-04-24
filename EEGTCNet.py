@@ -18,9 +18,6 @@ from preprocessing import (
     get_training_files,
     preprocess_subject_windows,
 )
-from cross_validation import make_cv_splits
-
-
 def prepare_input(X, y):
     """
     preprocessing.py output:
@@ -153,84 +150,6 @@ def EEGTCNet(n_classes, Chans=3, Samples=1000, layers=2, kernel_s=4, filt=12,
     return Model(inputs=input1, outputs=out)
 
 
-def run_eegtcnet_cv(X, y, groups, config, n_splits=10, epochs=80, batch_size=16, learning_rate=5e-4):
-    X, y = prepare_input(X, y)
-    splits = make_cv_splits(X, y, config=config, groups=groups, n_splits=n_splits)
-
-    accuracies = []
-    times = []
-
-    print("\n===== Running EEGTCNet =====")
-    print("Prepared X shape:", X.shape)
-    print("Prepared y shape:", y.shape)
-
-    n_classes = len(np.unique(y))
-    n_channels = X.shape[2]
-    n_samples = X.shape[3]
-
-    for fold, (train_idx, test_idx) in enumerate(splits, start=1):
-        X_train = X[train_idx]
-        X_test = X[test_idx]
-        y_train = y[train_idx]
-        y_test = y[test_idx]
-
-        model = EEGTCNet(
-            n_classes=n_classes,
-            Chans=n_channels,
-            Samples=n_samples,
-            layers=2,
-            kernel_s=4,
-            filt=12,
-            dropout=0.3,
-            activation='elu',
-            F1=8,
-            D=2,
-            kernLength=32,
-            dropout_eeg=0.2
-        )
-
-        model.compile(
-            loss="sparse_categorical_crossentropy",
-            optimizer=Adam(learning_rate=learning_rate),
-            metrics=["accuracy"],
-        )
-
-        early_stop = EarlyStopping(
-            monitor="val_loss",
-            patience=12,
-            restore_best_weights=True,
-            verbose=0,
-        )
-
-        start = time.time()
-
-        model.fit(
-            X_train,
-            y_train,
-            epochs=epochs,
-            batch_size=batch_size,
-            validation_split=0.2,
-            callbacks=[early_stop],
-            verbose=0,
-        )
-
-        end = time.time()
-
-        train_time = end - start
-        times.append(train_time)
-
-        y_prob = model.predict(X_test, verbose=0)
-        y_pred = np.argmax(y_prob, axis=1)
-
-        acc = accuracy_score(y_test, y_pred)
-        accuracies.append(acc)
-
-        print(f"EEGTCNet Fold {fold} accuracy: {acc:.4f}")
-        print(f"EEGTCNet Fold {fold} training time: {train_time:.4f} s\n")
-
-    return accuracies, times
-
-
 def run_eegtcnet_holdout(X_train, y_train, X_test, y_test,
                          epochs=80, batch_size=16, learning_rate=5e-4):
     """Train on X_train, evaluate on X_test (T→E protocol)."""
@@ -273,16 +192,4 @@ if __name__ == "__main__":
     print("Original y shape:", y.shape)
     print("groups is None:", groups is None)
 
-    accs, ts = run_eegtcnet_cv(
-        X, y, groups,
-        config=config,
-        n_splits=10,
-        epochs=80,
-        batch_size=16,
-        learning_rate=1e-3,
-    )
-
-    print("\n===== EEGTCNet Final Results =====")
-    print(f"Mean accuracy: {np.mean(accs):.4f}")
-    print(f"Std accuracy : {np.std(accs):.4f}")
-    print(f"Avg training time: {np.mean(ts):.4f} s")
+    print("\nUse run_all.py to run experiments with the T-E holdout protocol.")

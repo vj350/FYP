@@ -40,13 +40,13 @@ from preprocessing_2a import (
     preprocess_subject_windows_2a,
     preprocess_multiple_subjects_2a,
 )
-from fbcsp_svm import run_csp_svm_cv, run_fbcsp_svm_cv, run_csp_svm_holdout, run_fbcsp_svm_holdout
-from EEGNet import run_eegnet_cv, run_eegnet_holdout
-from DeepConvNet import run_deepconvnet_cv, run_deepconvnet_holdout
-from ShallowConvNet import run_shallowconvnet_cv, run_shallowconvnet_holdout
-from EEGTCNet import run_eegtcnet_cv, run_eegtcnet_holdout
-from ATCNet import run_atcnet_cv, run_atcnet_holdout
-from MCSANet import run_mcsanet_cv, run_mcsanet_holdout
+from fbcsp_svm import run_csp_svm_holdout, run_fbcsp_svm_holdout
+from EEGNet import run_eegnet_holdout
+from DeepConvNet import run_deepconvnet_holdout
+from ShallowConvNet import run_shallowconvnet_holdout
+from EEGTCNet import run_eegtcnet_holdout
+from ATCNet import run_atcnet_holdout
+from MCSANet import run_mcsanet_holdout
 
 
 # =========================
@@ -119,56 +119,6 @@ def run_model_holdout(name, X_train, y_train, X_test, y_test, config):
         raise ValueError(f"Unknown model: {name}")
 
 
-def run_model(name, X, y, groups, config, n_splits):
-    """
-    Dispatch to the correct run_*_cv function and return (accuracies, times).
-    """
-    if name == "csp":
-        return run_csp_svm_cv(X, y, groups, config, n_splits=n_splits)
-
-    elif name == "fbcsp":
-        return run_fbcsp_svm_cv(X, y, groups, config, n_splits=n_splits)
-
-    elif name == "eegnet":
-        return run_eegnet_cv(
-            X, y, groups, config, n_splits=n_splits,
-            epochs=50, batch_size=16, learning_rate=5e-4
-        )
-
-    elif name == "deepconv":
-        return run_deepconvnet_cv(
-            X, y, groups, config, n_splits=n_splits,
-            epochs=50, batch_size=16, learning_rate=5e-4
-        )
-
-    elif name == "shallowconv":
-        return run_shallowconvnet_cv(
-            X, y, groups, config, n_splits=n_splits,
-            epochs=50, batch_size=16, learning_rate=1e-3
-        )
-
-    elif name == "eegtcnet":
-        return run_eegtcnet_cv(
-            X, y, groups, config, n_splits=n_splits,
-            epochs=80, batch_size=16, learning_rate=5e-4
-        )
-
-    elif name == "atcnet":
-        return run_atcnet_cv(
-            X, y, groups, config, n_splits=n_splits,
-            epochs=100, batch_size=16, learning_rate=1e-3
-        )
-
-    elif name == "mcsanet":
-        return run_mcsanet_cv(
-            X, y, groups, config, n_splits=n_splits,
-            epochs=300, batch_size=16, learning_rate=1e-3
-        )
-
-    else:
-        raise ValueError(f"Unknown model: {name}")
-
-
 # =========================
 # Result table
 # =========================
@@ -221,10 +171,6 @@ def main():
     parser.add_argument(
         "--dataset", type=str, default="2b", choices=["2b", "2a"],
         help="Which dataset to use: 2b (default) or 2a."
-    )
-    parser.add_argument(
-        "--n-splits", type=int, default=10,
-        help="Number of CV folds. Default: 10."
     )
     args = parser.parse_args()
 

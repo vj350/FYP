@@ -18,9 +18,6 @@ from preprocessing import (
     get_training_files,
     preprocess_subject_windows,
 )
-from cross_validation import make_cv_splits
-
-
 def MCSANet(nb_classes, Chans=3, Samples=1000, F1=8, D=2, num_heads=2,
             dropout_rate=0.5, Fs=250):
     """
@@ -144,93 +141,6 @@ def prepare_mcsanet_input(X, y):
     return X.astype(np.float32), y.astype(np.int64)
 
 
-def run_mcsanet_cv(
-    X,
-    y,
-    groups,
-    config,
-    n_splits=10,
-    epochs=300,
-    batch_size=16,
-    learning_rate=1e-3,
-):
-    """
-    Run MCSANet with cross-validation.
-    """
-    X, y = prepare_mcsanet_input(X, y)
-
-    splits = make_cv_splits(X, y, config=config, groups=groups, n_splits=n_splits)
-
-    accuracies = []
-    times = []
-
-    print("\n===== Running MCSANet =====")
-    print("Prepared X shape:", X.shape)
-    print("Prepared y shape:", y.shape)
-
-    n_classes = len(np.unique(y))
-    n_channels = X.shape[1]
-    n_samples = X.shape[2]
-
-    for fold, (train_idx, test_idx) in enumerate(splits, start=1):
-        X_train = X[train_idx]
-        X_test = X[test_idx]
-        y_train = y[train_idx]
-        y_test = y[test_idx]
-
-        model = MCSANet(
-            nb_classes=n_classes,
-            Chans=n_channels,
-            Samples=n_samples,
-            F1=8,
-            D=2,
-            num_heads=2,
-            dropout_rate=0.5,
-            Fs=250,
-        )
-
-        model.compile(
-            loss='sparse_categorical_crossentropy',
-            optimizer=Adam(learning_rate=learning_rate),
-            metrics=['accuracy'],
-        )
-
-        early_stop = EarlyStopping(
-            monitor='val_loss',
-            patience=20,
-            restore_best_weights=True,
-            verbose=0,
-        )
-
-        start = time.time()
-
-        model.fit(
-            X_train,
-            y_train,
-            epochs=epochs,
-            batch_size=batch_size,
-            validation_split=0.2,
-            callbacks=[early_stop],
-            verbose=0,
-        )
-
-        end = time.time()
-
-        train_time = end - start
-        times.append(train_time)
-
-        y_prob = model.predict(X_test, verbose=0)
-        y_pred = np.argmax(y_prob, axis=1)
-
-        acc = accuracy_score(y_test, y_pred)
-        accuracies.append(acc)
-
-        print(f"MCSANet Fold {fold} accuracy: {acc:.4f}")
-        print(f"MCSANet Fold {fold} training time: {train_time:.4f} s\n")
-
-    return accuracies, times
-
-
 def run_mcsanet_holdout(X_train, y_train, X_test, y_test,
                         epochs=300, batch_size=16, learning_rate=1e-3):
     """Train on X_train, evaluate on X_test (T→E protocol)."""
@@ -272,11 +182,4 @@ if __name__ == "__main__":
     print("Original X shape:", X.shape)
     print("Original y shape:", y.shape)
 
-    mcsanet_accuracies, mcsanet_times = run_mcsanet_cv(
-        X, y, groups, config=config, n_splits=10
-    )
-
-    print("\n===== MCSANet Final Results =====")
-    print(f"Mean accuracy: {np.mean(mcsanet_accuracies):.4f}")
-    print(f"Std accuracy : {np.std(mcsanet_accuracies):.4f}")
-    print(f"Avg training time: {np.mean(mcsanet_times):.4f} s")
+    print("\nUse run_all.py to run experiments with the T-E holdout protocol.")
