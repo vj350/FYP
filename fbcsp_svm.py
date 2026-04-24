@@ -12,9 +12,6 @@ from preprocessing import (
     get_training_files,
     preprocess_subject_windows,
 )
-from cross_validation import make_cv_splits
-
-
 def cheby2_bandpass_filter_epochs(X, lowcut, highcut, fs=250, order=6, rs=20):
     """
     Apply Chebyshev Type II band-pass filtering to epoched EEG.
@@ -96,140 +93,6 @@ def select_top_mibif_features(X_train, y_train, X_test, k_features):
     return X_train_sel, X_test_sel, top_idx
 
 
-def run_csp_svm_cv(X, y, groups, config, n_splits=10, n_csp_components=2):
-    """
-    Run CSP + SVM baseline with cross-validation.
-    """
-    # MNE CSP expects (samples, channels, time)
-    X = np.transpose(X, (0, 2, 1))
-
-    splits = make_cv_splits(X, y, config=config, groups=groups, n_splits=n_splits)
-
-    accuracies = []
-    times = []
-
-    print("\n===== Running CSP + SVM =====")
-
-    for fold, (train_idx, test_idx) in enumerate(splits, start=1):
-        X_train = X[train_idx]
-        X_test = X[test_idx]
-
-        y_train = y[train_idx]
-        y_test = y[test_idx]
-
-        csp = CSP(
-            n_components=n_csp_components,
-            log=True,
-            norm_trace=False
-        )
-
-        X_train_features = csp.fit_transform(X_train, y_train)
-        X_test_features = csp.transform(X_test)
-
-        clf = SVC(kernel="linear")
-
-        start = time.time()
-        clf.fit(X_train_features, y_train)
-        end = time.time()
-
-        train_time = end - start
-        y_pred = clf.predict(X_test_features)
-        acc = accuracy_score(y_test, y_pred)
-
-        accuracies.append(acc)
-        times.append(train_time)
-
-        print(f"CSP Fold {fold} accuracy: {acc:.4f}")
-        print(f"CSP Fold {fold} training time: {train_time:.4f} s\n")
-
-    return accuracies, times
-
-
-def run_fbcsp_svm_cv(
-    X,
-    y,
-    groups,
-    config,
-    n_splits=10,
-    n_csp_components=2,
-    fs=250,
-    k_features=8,
-):
-    """
-    Run FBCSP + MIBIF-style feature selection + SVM.
-
-    Pipeline:
-    filter bank -> CSP per band -> concatenate features
-    -> MI feature selection -> SVM
-    """
-    # MNE CSP expects (samples, channels, time)
-    X = np.transpose(X, (0, 2, 1))
-
-    splits = make_cv_splits(X, y, config=config, groups=groups, n_splits=n_splits)
-    bands = get_filter_bands(config)
-
-    accuracies = []
-    times = []
-
-    print("\n===== Running FBCSP + SVM =====")
-    print("Filter bands:", bands)
-
-    for fold, (train_idx, test_idx) in enumerate(splits, start=1):
-        X_train = X[train_idx]
-        X_test = X[test_idx]
-
-        y_train = y[train_idx]
-        y_test = y[test_idx]
-
-        train_feature_list = []
-        test_feature_list = []
-
-        for lowcut, highcut in bands:
-            X_train_band = cheby2_bandpass_filter_epochs(X_train, lowcut, highcut, fs=fs)
-            X_test_band = cheby2_bandpass_filter_epochs(X_test, lowcut, highcut, fs=fs)
-
-            csp = CSP(
-                n_components=n_csp_components,
-                log=True,
-                norm_trace=False
-            )
-
-            X_train_band_features = csp.fit_transform(X_train_band, y_train)
-            X_test_band_features = csp.transform(X_test_band)
-
-            train_feature_list.append(X_train_band_features)
-            test_feature_list.append(X_test_band_features)
-
-        # Concatenate features from all bands
-        X_train_features = np.concatenate(train_feature_list, axis=1)
-        X_test_features = np.concatenate(test_feature_list, axis=1)
-
-        # MIBIF-style feature selection on training fold only
-        k_use = min(k_features, X_train_features.shape[1])
-        X_train_sel, X_test_sel, top_idx = select_top_mibif_features(
-            X_train_features, y_train, X_test_features, k_use
-        )
-
-        clf = SVC(kernel="linear")
-
-        start = time.time()
-        clf.fit(X_train_sel, y_train)
-        end = time.time()
-
-        train_time = end - start
-        y_pred = clf.predict(X_test_sel)
-        acc = accuracy_score(y_test, y_pred)
-
-        accuracies.append(acc)
-        times.append(train_time)
-
-        print(f"FBCSP Fold {fold} accuracy: {acc:.4f}")
-        print(f"FBCSP Fold {fold} training time: {train_time:.4f} s")
-        print(f"FBCSP Fold {fold} selected feature indices: {top_idx}\n")
-
-    return accuracies, times
-
-
 def run_csp_svm_holdout(X_train, y_train, X_test, y_test, n_csp_components=2):
     """Train on X_train, evaluate on X_test (T→E protocol)."""
     X_train = np.transpose(X_train, (0, 2, 1))
@@ -302,35 +165,4 @@ if __name__ == "__main__":
     if groups is not None:
         print("groups shape:", groups.shape)
 
-    # CSP + SVM
-    csp_accuracies, csp_times = run_csp_svm_cv(
-        X,
-        y,
-        groups,
-        config=config,
-        n_splits=10,
-        n_csp_components=2
-    )
-
-    # FBCSP + SVM
-    fbcsp_accuracies, fbcsp_times = run_fbcsp_svm_cv(
-        X,
-        y,
-        groups,
-        config=config,
-        n_splits=10,
-        n_csp_components=2,
-        fs=250,
-        k_features=8
-    )
-
-    print("\n===== Final Comparison =====")
-    print("CSP + SVM")
-    print(f"Mean accuracy: {np.mean(csp_accuracies):.4f}")
-    print(f"Std accuracy : {np.std(csp_accuracies):.4f}")
-    print(f"Avg training time: {np.mean(csp_times):.4f} s")
-
-    print("\nFBCSP + SVM")
-    print(f"Mean accuracy: {np.mean(fbcsp_accuracies):.4f}")
-    print(f"Std accuracy : {np.std(fbcsp_accuracies):.4f}")
-    print(f"Avg training time: {np.mean(fbcsp_times):.4f} s")
+    print("\nUse run_all.py to run experiments with the T-E holdout protocol.")
