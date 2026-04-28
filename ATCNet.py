@@ -11,8 +11,8 @@ from tensorflow.keras.layers import (
 from tensorflow.keras.regularizers import L2
 from tensorflow.keras.constraints import max_norm
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.callbacks import EarlyStopping
-from sklearn.metrics import accuracy_score
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau, ModelCheckpoint
+from sklearn.metrics import accuracy_score, cohen_kappa_score
 
 from preprocessing import (
     PreprocessingConfig,
@@ -222,15 +222,48 @@ def ATCNet(n_classes, in_chans=3, in_samples=1000, n_windows=5,
     return Model(inputs=input_1, outputs=out)
 
 
-def run_atcnet_holdout(X_train, y_train, X_test, y_test,
-                       epochs=100, batch_size=16, learning_rate=1e-3):
-    """Train on X_train, evaluate on X_test (T→E protocol)."""
-    X_train, y_train = prepare_input(X_train, y_train)
-    X_test, y_test = prepare_input(X_test, y_test)
+def standardize(X_train, X_test):
+    """
+    Per-channel StandardScaler normalisation.
+    Matches the GitHub preprocess.py standardize_data function.
 
-    n_classes = len(np.unique(y_train))
+    X_train, X_test: shape (N, 1, C, T)
+    Scaler is fit on training data only, applied to both.
+    """
+    from sklearn.preprocessing import StandardScaler
     n_channels = X_train.shape[2]
-    n_samples = X_train.shape[3]
+    for j in range(n_channels):
+        scaler = StandardScaler()
+        scaler.fit(X_train[:, 0, j, :])
+        X_train[:, 0, j, :] = scaler.transform(X_train[:, 0, j, :])
+        X_test[:, 0, j, :]  = scaler.transform(X_test[:, 0, j, :])
+    return X_train, X_test
+
+
+def run_atcnet_holdout(X_train, y_train, X_test, y_test,
+                       epochs=500, batch_size=64, learning_rate=1e-3,
+                       augment=True):
+    """
+    Train on X_train, evaluate on X_test.
+
+    Replicates ATCNet paper (Altaheri et al., 2022):
+    - No downsampling — ATCNet is designed for 250 Hz data
+    - Full window (1000 samples at 250 Hz, B=2) — no time crop
+    - Sliding window is INTERNAL to the model via n_windows=5
+    - Per-channel StandardScaler normalisation (GitHub preprocess.py)
+    - Batch size 64, 500 epochs, no early stopping
+    - ReduceLROnPlateau: factor=0.9, patience=20, min_lr=1e-4
+    """
+    # Full window — no crop
+    X_train, y_train = prepare_input(X_train, y_train)
+    X_test,  y_test  = prepare_input(X_test,  y_test)
+
+    # Per-channel standardisation (fit on train, apply to both)
+    X_train, X_test = standardize(X_train, X_test)
+
+    n_classes  = len(np.unique(y_train))
+    n_channels = X_train.shape[2]
+    n_samples  = X_train.shape[3]
 
     model = ATCNet(n_classes=n_classes, in_chans=n_channels, in_samples=n_samples,
                    n_windows=5, eegn_F1=16, eegn_D=2, eegn_kernelSize=64,
@@ -240,17 +273,21 @@ def run_atcnet_holdout(X_train, y_train, X_test, y_test,
     model.compile(loss='sparse_categorical_crossentropy',
                   optimizer=Adam(learning_rate=learning_rate), metrics=['accuracy'])
 
-    early_stop = EarlyStopping(monitor='val_loss', patience=15,
+    reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.90,
+                                  patience=20, min_lr=1e-4, verbose=0)
+    early_stop = EarlyStopping(monitor='val_loss', patience=50,
                                restore_best_weights=True, verbose=0)
+
     start = time.time()
     model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size,
-              validation_split=0.2, callbacks=[early_stop], verbose=0)
+              validation_split=0.2, callbacks=[reduce_lr, early_stop], verbose=0)
     end = time.time()
 
     y_pred = np.argmax(model.predict(X_test, verbose=0), axis=1)
     acc = accuracy_score(y_test, y_pred)
-    print(f"ATCNet holdout accuracy: {acc:.4f}  time: {end-start:.1f}s")
-    return acc, end - start
+    kappa = cohen_kappa_score(y_test, y_pred)
+    print(f"ATCNet accuracy: {acc:.4f}  kappa: {kappa:.2f}  time: {end-start:.1f}s")
+    return acc, kappa, end - start
 
 
 if __name__ == "__main__":

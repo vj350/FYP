@@ -9,9 +9,8 @@ from tensorflow.keras.layers import (
 )
 from tensorflow.keras.constraints import max_norm
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.layers import MultiHeadAttention
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, cohen_kappa_score
 
 from preprocessing import (
     PreprocessingConfig,
@@ -123,6 +122,68 @@ def MCSANet(nb_classes, Chans=3, Samples=1000, F1=8, D=2, num_heads=2,
     return Model(inputs=input1, outputs=softmax)
 
 
+def normalize_trials(X):
+    """
+    Per-trial per-channel z-score normalization (paper section 2.3.1, Eq. 2).
+
+    X_hat(c,t) = (X(c,t) - mu_c) / sigma_c
+
+    where mu_c and sigma_c are the mean and std of channel c within that trial.
+    Applied independently to each trial — no information from other trials is used.
+
+    X shape: (N, T, C)
+    """
+    X = X.copy().astype(np.float32)
+    for i in range(X.shape[0]):
+        for c in range(X.shape[2]):
+            mu = X[i, :, c].mean()
+            sigma = X[i, :, c].std()
+            if sigma > 0:
+                X[i, :, c] = (X[i, :, c] - mu) / sigma
+    return X
+
+
+def tss_augment(X, y, n_new_trials=200, n_segments=4, n_select=4, random_state=42):
+    """
+    Temporal Segment Shuffling (TSS) augmentation (paper section 2.3.2).
+
+    For each new trial:
+      1. Randomly select n_select=4 trials from the same class
+      2. Divide each into n_segments=4 equal segments
+      3. Cyclically combine: segment i comes from trial (i % n_select)
+
+    Paper uses n_segments=4, n_new_trials=200 (best config from Table 5).
+
+    X : (N, T, C)
+    y : (N,)
+    Returns X_aug (N + n_new_trials, T, C), y_aug (N + n_new_trials,)
+    """
+    rng = np.random.RandomState(random_state)
+    classes = np.unique(y)
+    n_per_class = n_new_trials // len(classes)
+
+    T = X.shape[1]
+    seg_len = T // n_segments
+
+    X_new, y_new = [], []
+    for cls in classes:
+        cls_idx = np.where(y == cls)[0]
+        if len(cls_idx) < n_select:
+            continue
+        for _ in range(n_per_class):
+            selected = rng.choice(cls_idx, size=n_select, replace=False)
+            segments = []
+            for s in range(n_segments):
+                trial = selected[s % n_select]
+                segments.append(X[trial, s * seg_len:(s + 1) * seg_len, :])
+            X_new.append(np.concatenate(segments, axis=0))
+            y_new.append(cls)
+
+    X_aug = np.concatenate([X, np.array(X_new, dtype=np.float32)], axis=0)
+    y_aug = np.concatenate([y, np.array(y_new)], axis=0)
+    return X_aug, y_aug
+
+
 def prepare_mcsanet_input(X, y):
     """
     Convert preprocessing output to MCSANet input format.
@@ -142,8 +203,27 @@ def prepare_mcsanet_input(X, y):
 
 
 def run_mcsanet_holdout(X_train, y_train, X_test, y_test,
-                        epochs=300, batch_size=16, learning_rate=1e-3):
-    """Train on X_train, evaluate on X_test (T→E protocol)."""
+                        epochs=300, batch_size=16, learning_rate=1e-3,
+                        augment=True):
+    """
+    Train on X_train, evaluate on X_test.
+
+    Matches MCSANet paper (Devi et al., 2026):
+    - No bandpass filter — raw signal
+    - No downsampling — stays at 250 Hz
+    - Full 4 s trial window (1000 samples) — no crop
+    - Per-trial per-channel z-score normalisation (paper section 2.3.1, Eq. 2)
+    - augment=True: TSS augmentation (+200 synthetic trials, 4 segments, paper section 2.3.2)
+    """
+    # Per-trial per-channel z-score normalisation (paper Eq. 2)
+    X_train = normalize_trials(X_train)
+    X_test  = normalize_trials(X_test)
+
+    # TSS augmentation on training data only (paper section 2.3.2)
+    if augment:
+        X_train, y_train = tss_augment(X_train, y_train,
+                                       n_new_trials=200, n_segments=4, n_select=4)
+
     X_train, y_train = prepare_mcsanet_input(X_train, y_train)
     X_test, y_test = prepare_mcsanet_input(X_test, y_test)
 
@@ -156,17 +236,16 @@ def run_mcsanet_holdout(X_train, y_train, X_test, y_test,
     model.compile(loss='sparse_categorical_crossentropy',
                   optimizer=Adam(learning_rate=learning_rate), metrics=['accuracy'])
 
-    early_stop = EarlyStopping(monitor='val_loss', patience=20,
-                               restore_best_weights=True, verbose=0)
     start = time.time()
     model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size,
-              validation_split=0.2, callbacks=[early_stop], verbose=0)
+              validation_split=0.2, verbose=0)
     end = time.time()
 
     y_pred = np.argmax(model.predict(X_test, verbose=0), axis=1)
     acc = accuracy_score(y_test, y_pred)
-    print(f"MCSANet holdout accuracy: {acc:.4f}  time: {end-start:.1f}s")
-    return acc, end - start
+    kappa = cohen_kappa_score(y_test, y_pred)
+    print(f"MCSANet accuracy: {acc:.4f}  kappa: {kappa:.2f}  time: {end-start:.1f}s")
+    return acc, kappa, end - start
 
 
 if __name__ == "__main__":

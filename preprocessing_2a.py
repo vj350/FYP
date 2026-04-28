@@ -116,12 +116,13 @@ def extract_trials_2a(
 def preprocess_subject_trials_2a(
     file_path: str | Path,
     config: PreprocessingConfig,
+    apply_filter: bool = True,
 ) -> Tuple[List[np.ndarray], np.ndarray, int]:
     """
     Load one Dataset 2a subject file and return extracted + filtered trials.
 
     Same preprocessing method as Dataset 2b:
-    - Bandpass filter determined by C and D factors
+    - Bandpass filter determined by C and D factors (skipped if apply_filter=False)
     - Time window determined by B factor (3-6s for B=2)
     - Artifact trials removed
     """
@@ -145,12 +146,15 @@ def preprocess_subject_trials_2a(
         if len(trials) == 0:
             continue
 
-        filtered_trials = [
-            bandpass_filter(trial, fs=fs_value, lowcut=lowcut, highcut=highcut)
-            for trial in trials
-        ]
+        if apply_filter:
+            processed_trials = [
+                bandpass_filter(trial, fs=fs_value, lowcut=lowcut, highcut=highcut)
+                for trial in trials
+            ]
+        else:
+            processed_trials = trials
 
-        all_trials.extend(filtered_trials)
+        all_trials.extend(processed_trials)
         all_labels.extend(labels.tolist())
 
     return all_trials, np.array(all_labels, dtype=int), fs_value
@@ -159,6 +163,7 @@ def preprocess_subject_trials_2a(
 def preprocess_subject_windows_2a(
     file_path: str | Path,
     config: PreprocessingConfig,
+    apply_filter: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray | None]:
     """
     Full preprocessing pipeline for one Dataset 2a subject file.
@@ -175,7 +180,7 @@ def preprocess_subject_windows_2a(
         groups: (N,) or None
     """
     from preprocessing import make_window_dataset
-    trials, labels, fs_value = preprocess_subject_trials_2a(file_path, config)
+    trials, labels, fs_value = preprocess_subject_trials_2a(file_path, config, apply_filter=apply_filter)
     return make_window_dataset(trials, labels, config=config, fs=fs_value)
 
 
