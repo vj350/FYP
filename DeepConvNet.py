@@ -3,14 +3,17 @@ import numpy as np
 
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, cohen_kappa_score
 
 from EEGModels import DeepConvNet
 from preprocessing import (
     PreprocessingConfig,
     get_training_files,
     preprocess_subject_windows,
+    resample_to_128hz,
 )
+
+
 def prepare_deepconvnet_input(X, y):
     """
     Convert preprocessing output to DeepConvNet input.
@@ -21,32 +24,86 @@ def prepare_deepconvnet_input(X, y):
     DeepConvNet Keras expects:
         X shape = (n_samples, n_channels, n_times, 1)
 
-    Also convert labels from {1,2} -> {0,1}
+    Also convert labels from {1,2,...} -> {0,1,...}
     """
     X = np.transpose(X, (0, 2, 1))   # (N, T, C) -> (N, C, T)
     X = X[..., np.newaxis]           # (N, C, T) -> (N, C, T, 1)
-
     y = y.astype(int) - 1
-
     return X.astype(np.float32), y.astype(np.int64)
 
 
-def run_deepconvnet_holdout(X_train, y_train, X_test, y_test,
-                            epochs=50, batch_size=16, learning_rate=5e-4):
-    """Train on X_train, evaluate on X_test (T→E protocol)."""
-    X_train, y_train = prepare_deepconvnet_input(X_train, y_train)
-    X_test, y_test = prepare_deepconvnet_input(X_test, y_test)
+def sliding_window_augment(X, y, window=256, step=25):
+    """
+    Augment training data by sliding a fixed-length window across each trial.
 
-    n_classes = len(np.unique(y_train))
+    Matches the 'cropped training' strategy from the original DeepConvNet paper
+    (Schirrmeister et al., 2017) and the supervisor's sliding-window setup (A=4).
+
+    Parameters
+    ----------
+    X      : np.ndarray, shape (N, T, C)  -- already at 128 Hz
+    y      : np.ndarray, shape (N,)
+    window : int  -- window length in samples (256 = 2 s at 128 Hz)
+    step   : int  -- step size in samples   ( 25 ~ 0.2 s at 128 Hz)
+
+    Returns
+    -------
+    X_aug  : np.ndarray, shape (N * n_windows, window, C)
+    y_aug  : np.ndarray, shape (N * n_windows,)
+
+    With a 512-sample (4 s at 128 Hz) input and window=256, step=25:
+        n_windows = (512 - 256) // 25 + 1 = 11 windows per trial (~11x augmentation)
+    """
+    T = X.shape[1]
+    X_aug, y_aug = [], []
+    for i in range(X.shape[0]):
+        for start in range(0, T - window + 1, step):
+            X_aug.append(X[i, start:start + window, :])
+            y_aug.append(y[i])
+    return np.array(X_aug, dtype=np.float32), np.array(y_aug)
+
+
+def run_deepconvnet_holdout(X_train, y_train, X_test, y_test,
+                            epochs=200, batch_size=16, learning_rate=1e-3,
+                            augment=True):
+    """
+    Train on X_train, evaluate on X_test.
+
+    Follows the original DeepConvNet paper and supervisor's setup:
+    - Downsample to 128 Hz (matches original paper kernels / pool sizes)
+    - augment=True: sliding window augmentation on training (~11x), single crop on test
+    - augment=False: single [0.5, 2.5]s crop for both train and test
+    - (1, 5) temporal kernels and (1, 2) max-pooling at 128 Hz
+    - 200 epochs with early stopping (patience=20)
+    """
+    # Downsample from 250 Hz to 128 Hz
+    X_train = resample_to_128hz(X_train)
+    X_test  = resample_to_128hz(X_test)
+
+    t_start = int(0.5 * 128)   # 64
+    t_end   = int(2.5 * 128)   # 320
+
+    if augment:
+        # Sliding window augmentation across the full 4 s window (~11x data)
+        X_train, y_train = sliding_window_augment(X_train, y_train, window=256, step=25)
+    else:
+        X_train = X_train[:, t_start:t_end, :]
+
+    X_test = X_test[:, t_start:t_end, :]
+
+    X_train, y_train = prepare_deepconvnet_input(X_train, y_train)
+    X_test, y_test   = prepare_deepconvnet_input(X_test, y_test)
+
+    n_classes  = len(np.unique(y_train))
     n_channels = X_train.shape[1]
-    n_samples = X_train.shape[2]
+    n_samples  = X_train.shape[2]
 
     model = DeepConvNet(nb_classes=n_classes, Chans=n_channels, Samples=n_samples,
                         dropoutRate=0.5)
     model.compile(loss='sparse_categorical_crossentropy',
                   optimizer=Adam(learning_rate=learning_rate), metrics=['accuracy'])
 
-    early_stop = EarlyStopping(monitor='val_loss', patience=10,
+    early_stop = EarlyStopping(monitor='val_loss', patience=20,
                                restore_best_weights=True, verbose=0)
     start = time.time()
     model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size,
@@ -55,26 +112,12 @@ def run_deepconvnet_holdout(X_train, y_train, X_test, y_test,
 
     y_pred = np.argmax(model.predict(X_test, verbose=0), axis=1)
     acc = accuracy_score(y_test, y_pred)
-    print(f"DeepConvNet holdout accuracy: {acc:.4f}  time: {end-start:.1f}s")
-    return acc, end - start
+    kappa = cohen_kappa_score(y_test, y_pred)
+    print(f"DeepConvNet accuracy: {acc:.4f}  kappa: {kappa:.2f}  time: {end-start:.1f}s")
+    return acc, kappa, end - start
 
 
 if __name__ == "__main__":
     files = get_training_files("data/2b")
-
-    # your chosen preprocessing factors
     config = PreprocessingConfig(A=1, B=2, C=1, D=2)
-
-    print("Running DeepConvNet experiment with config:", config)
-
-    # start with one subject first
-    X, y, groups = preprocess_subject_windows(files[0], config)
-
-    print("\nDataset loaded")
-    print("Original X shape:", X.shape)
-    print("Original y shape:", y.shape)
-    print("groups is None:", groups is None)
-    if groups is not None:
-        print("groups shape:", groups.shape)
-
-    print("\nUse run_all.py to run experiments with the T-E holdout protocol.")
+    print("Use run_all.py to run experiments.")

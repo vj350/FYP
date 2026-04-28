@@ -3,14 +3,17 @@ import numpy as np
 
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, cohen_kappa_score
 
 from EEGModels import ShallowConvNet
 from preprocessing import (
     PreprocessingConfig,
     get_training_files,
     preprocess_subject_windows,
+    resample_to_128hz,
 )
+
+
 def prepare_shallowconvnet_input(X, y):
     """
     Convert preprocessing output to ShallowConvNet input.
@@ -31,9 +34,64 @@ def prepare_shallowconvnet_input(X, y):
     return X.astype(np.float32), y.astype(np.int64)
 
 
+def sliding_window_augment(X, y, window=256, step=25):
+    """
+    Augment training data by sliding a fixed-length window across each trial.
+
+    Matches the 'cropped training' strategy from the original ShallowConvNet paper
+    (Schirrmeister et al., 2017).
+
+    Parameters
+    ----------
+    X      : np.ndarray, shape (N, T, C)  -- already at 128 Hz
+    y      : np.ndarray, shape (N,)
+    window : int  -- window length in samples (256 = 2 s at 128 Hz)
+    step   : int  -- step size in samples   ( 25 ~ 0.2 s at 128 Hz)
+
+    Returns
+    -------
+    X_aug  : np.ndarray, shape (N * n_windows, window, C)
+    y_aug  : np.ndarray, shape (N * n_windows,)
+
+    With a 512-sample (4 s at 128 Hz) input and window=256, step=25:
+        n_windows = (512 - 256) // 25 + 1 = 11 windows per trial (~11x augmentation)
+    """
+    T = X.shape[1]
+    X_aug, y_aug = [], []
+    for i in range(X.shape[0]):
+        for start in range(0, T - window + 1, step):
+            X_aug.append(X[i, start:start + window, :])
+            y_aug.append(y[i])
+    return np.array(X_aug, dtype=np.float32), np.array(y_aug)
+
+
 def run_shallowconvnet_holdout(X_train, y_train, X_test, y_test,
-                               epochs=50, batch_size=16, learning_rate=1e-3):
-    """Train on X_train, evaluate on X_test (T→E protocol)."""
+                               epochs=200, batch_size=16, learning_rate=1e-3,
+                               augment=True):
+    """
+    Train on X_train, evaluate on X_test.
+
+    Follows the original ShallowConvNet paper (Schirrmeister et al., 2017):
+    - Downsample to 128 Hz before training (paper resampled from 250 Hz)
+    - augment=True: sliding window augmentation on training (~11x), single crop on test
+    - augment=False: single [0.5, 2.5]s crop for both train and test
+    - 200 epochs with early stopping (patience=20)
+    """
+    # Downsample from 250 Hz to 128 Hz (matches original paper)
+    X_train = resample_to_128hz(X_train)
+    X_test  = resample_to_128hz(X_test)
+
+    t_start = int(0.5 * 128)   # 64
+    t_end   = int(2.5 * 128)   # 320
+
+    if augment:
+        # Sliding window augmentation across the full 4 s window (~11x data)
+        X_train, y_train = sliding_window_augment(X_train, y_train, window=256, step=25)
+    else:
+        X_train = X_train[:, t_start:t_end, :]
+
+    X_test = X_test[:, t_start:t_end, :]
+
     X_train, y_train = prepare_shallowconvnet_input(X_train, y_train)
     X_test, y_test = prepare_shallowconvnet_input(X_test, y_test)
 
@@ -46,7 +104,7 @@ def run_shallowconvnet_holdout(X_train, y_train, X_test, y_test,
     model.compile(loss='sparse_categorical_crossentropy',
                   optimizer=Adam(learning_rate=learning_rate), metrics=['accuracy'])
 
-    early_stop = EarlyStopping(monitor='val_loss', patience=10,
+    early_stop = EarlyStopping(monitor='val_loss', patience=20,
                                restore_best_weights=True, verbose=0)
     start = time.time()
     model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size,
@@ -55,8 +113,9 @@ def run_shallowconvnet_holdout(X_train, y_train, X_test, y_test,
 
     y_pred = np.argmax(model.predict(X_test, verbose=0), axis=1)
     acc = accuracy_score(y_test, y_pred)
-    print(f"ShallowConvNet holdout accuracy: {acc:.4f}  time: {end-start:.1f}s")
-    return acc, end - start
+    kappa = cohen_kappa_score(y_test, y_pred)
+    print(f"ShallowConvNet accuracy: {acc:.4f}  kappa: {kappa:.2f}  time: {end-start:.1f}s")
+    return acc, kappa, end - start
 
 
 if __name__ == "__main__":

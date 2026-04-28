@@ -111,6 +111,36 @@ def get_bandpass_range(C: int, D: int) -> Tuple[float, float]:
 # =========================
 # Basic signal processing
 # =========================
+def resample_to_128hz(X: np.ndarray, orig_fs: int = 250) -> np.ndarray:
+    """
+    Downsample EEG data to 128 Hz using polyphase filtering.
+
+    Both the EEGNet and DeepConvNet original papers resampled their data
+    to 128 Hz before training. Call this inside model files that require
+    128 Hz input (EEGNet, DeepConvNet, ShallowConvNet).
+
+    Parameters
+    ----------
+    X       : np.ndarray, shape (N, T, C)
+    orig_fs : int, original sampling rate (default 250 Hz)
+
+    Returns
+    -------
+    X_resampled : np.ndarray, shape (N, T_new, C)
+        where T_new = round(T * 128 / orig_fs)
+    """
+    from scipy.signal import resample_poly
+    from math import gcd
+
+    if orig_fs == 128:
+        return X
+
+    g    = gcd(128, orig_fs)
+    up   = 128 // g
+    down = orig_fs // g
+    return resample_poly(X, up, down, axis=1).astype(np.float32)
+
+
 def bandpass_filter(
     data: np.ndarray,
     fs: int = FS_DEFAULT,
@@ -238,6 +268,7 @@ def extract_trials_from_block(
 def preprocess_subject_trials(
     file_path: str | Path,
     config: PreprocessingConfig,
+    apply_filter: bool = True,
 ) -> Tuple[List[np.ndarray], np.ndarray, int]:
     """
     Load one subject file and return extracted + filtered full trials.
@@ -247,6 +278,8 @@ def preprocess_subject_trials(
     - C2/D1 -> 4-30
     - C1/D2 -> 8-40
     - C2/D2 -> 4-40
+
+    Set apply_filter=False to skip bandpass filtering (raw signal).
     """
     data = load_subject_mat(file_path)
 
@@ -262,12 +295,15 @@ def preprocess_subject_trials(
         block_struct = data[0, i]
         trials, labels, fs_value = extract_trials_from_block(block_struct, config)
 
-        filtered_trials = [
-            bandpass_filter(trial, fs=fs_value, lowcut=lowcut, highcut=highcut)
-            for trial in trials
-        ]
+        if apply_filter:
+            processed_trials = [
+                bandpass_filter(trial, fs=fs_value, lowcut=lowcut, highcut=highcut)
+                for trial in trials
+            ]
+        else:
+            processed_trials = trials
 
-        all_trials.extend(filtered_trials)
+        all_trials.extend(processed_trials)
         all_labels.extend(labels.tolist())
 
     return all_trials, np.array(all_labels, dtype=int), fs_value
@@ -338,6 +374,7 @@ def make_window_dataset(
 def preprocess_subject_windows(
     file_path: str | Path,
     config: PreprocessingConfig,
+    apply_filter: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray | None]:
     """
     Full preprocessing for one subject file.
@@ -345,10 +382,10 @@ def preprocess_subject_windows(
     Steps:
     - load file
     - extract trials using factor B
-    - apply broad preprocessing band-pass using C/D
+    - apply broad preprocessing band-pass using C/D (skipped if apply_filter=False)
     - create samples using factor A
     """
-    trials, labels, fs_value = preprocess_subject_trials(file_path, config)
+    trials, labels, fs_value = preprocess_subject_trials(file_path, config, apply_filter=apply_filter)
     return make_window_dataset(trials, labels, config=config, fs=fs_value)
 
 
