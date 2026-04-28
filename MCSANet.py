@@ -35,10 +35,9 @@ def MCSANet(nb_classes, Chans=3, Samples=1000, F1=8, D=2, num_heads=2,
               that generates synthetic trials by recombining segments from 4
               trials of the same class. TSS is NOT part of the model architecture;
               it is applied to the training data before training.
-        TSS is intentionally excluded here to ensure a fair comparison with the
-        other models (EEGNet, DeepConvNet, ATCNet, etc.), none of which use
-        data augmentation. The paper reports ~2.8% accuracy gain from TSS on
-        Dataset 2b, so results here reflect the model architecture alone.
+        TSS is included here (augment=True by default) to match the paper's
+        reported results. The paper reports ~2.8% accuracy gain from TSS on
+        Dataset 2b.
 
     Architecture:
         1. Convolutional Block:

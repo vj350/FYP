@@ -2,6 +2,7 @@ import time
 import numpy as np
 import tensorflow as tf
 
+from scipy.signal import butter, filtfilt
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import (
     Input, Permute, Conv2D, Conv1D, DepthwiseConv2D,
@@ -19,6 +20,13 @@ from preprocessing import (
     get_training_files,
     preprocess_subject_windows,
 )
+def _bandpass(X, fs=250, lowcut=4.0, highcut=40.0, order=4):
+    """4-40 Hz 4th-order Butterworth bandpass (Altaheri et al. 2022). X: (N, T, C)"""
+    nyq = 0.5 * fs
+    b, a = butter(order, [lowcut / nyq, highcut / nyq], btype='band')
+    return filtfilt(b, a, X, axis=1)
+
+
 def prepare_input(X, y):
     """
     preprocessing.py output:
@@ -254,6 +262,10 @@ def run_atcnet_holdout(X_train, y_train, X_test, y_test,
     - Batch size 64, 500 epochs, no early stopping
     - ReduceLROnPlateau: factor=0.9, patience=20, min_lr=1e-4
     """
+    # 4-40 Hz bandpass (Altaheri et al. 2022)
+    X_train = _bandpass(X_train.astype(np.float32))
+    X_test  = _bandpass(X_test.astype(np.float32))
+
     # Full window — no crop
     X_train, y_train = prepare_input(X_train, y_train)
     X_test,  y_test  = prepare_input(X_test,  y_test)
