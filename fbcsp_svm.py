@@ -95,26 +95,37 @@ def select_top_mibif_features(X_train, y_train, X_test, k_features):
     return X_train_sel, X_test_sel, top_idx
 
 
-def sliding_window_augment(X, y, window_samples=500, step_samples=50):
+def baseline_correct(X, fs=250, baseline_duration=0.5):
+    """
+    Subtract per-trial per-channel mean of first baseline_duration seconds.
+    Supervisor paper Section II.A: first 0.5 s used as reference baseline.
+    X shape: (N, T, C)
+    """
+    n_baseline = int(baseline_duration * fs)
+    baseline_mean = X[:, :n_baseline, :].mean(axis=1, keepdims=True)
+    return X - baseline_mean
+
+
+def sliding_window_augment(X, y, window_samples=400, step_samples=100):
     """
     Augment training data by sliding a fixed-length window across each trial.
 
-    Matches the supervisor's sliding-window setup (A=4: 2 s window, 0.2 s step).
+    Supervisor paper (Section II.D): 1.6 s window, 100-sample stride -> ~7x augmentation.
 
     Parameters
     ----------
     X             : np.ndarray, shape (N, T, C)  -- at 250 Hz
     y             : np.ndarray, shape (N,)
-    window_samples: int  -- window length (500 = 2 s at 250 Hz)
-    step_samples  : int  -- step size    ( 50 = 0.2 s at 250 Hz)
+    window_samples: int  -- window length (400 = 1.6 s at 250 Hz)
+    step_samples  : int  -- step size   (100 = 0.4 s at 250 Hz)
 
     Returns
     -------
     X_aug : np.ndarray, shape (N * n_windows, window_samples, C)
     y_aug : np.ndarray, shape (N * n_windows,)
 
-    With a 1000-sample (4 s at 250 Hz) input and window=500, step=50:
-        n_windows = (1000 - 500) // 50 + 1 = 11 windows per trial (~11x augmentation)
+    With a 1000-sample (4 s at 250 Hz) input and window=400, step=100:
+        n_windows = (1000 - 400) // 100 + 1 = 7 windows per trial (~7x augmentation)
     """
     T = X.shape[1]
     X_aug, y_aug = [], []
@@ -134,12 +145,15 @@ def run_csp_svm_holdout(X_train, y_train, X_test, y_test, n_csp_components=2,
     - augment=True:  sliding window augmentation (~11x) on train, single crop on test
     - augment=False: single [0.5, 2.5]s crop for both train and test
     """
-    t_start = int(0.5 * fs)   # 125
-    t_end   = int(2.5 * fs)   # 625
+    t_start = int(0.5 * fs)          # 125
+    t_end   = t_start + 400          # 525  (1.6 s window)
+
+    # Baseline correction (supervisor paper Section II.A)
+    X_train = baseline_correct(X_train, fs=fs)
+    X_test  = baseline_correct(X_test,  fs=fs)
 
     if augment:
-        X_train, y_train = sliding_window_augment(X_train, y_train,
-                                                  window_samples=500, step_samples=50)
+        X_train, y_train = sliding_window_augment(X_train, y_train)
     else:
         X_train = X_train[:, t_start:t_end, :]
 
@@ -177,12 +191,15 @@ def run_fbcsp_svm_holdout(X_train, y_train, X_test, y_test, config,
     - MIBIF feature selection
     - Linear SVM classifier
     """
-    t_start = int(0.5 * fs)   # 125
-    t_end   = int(2.5 * fs)   # 625
+    t_start = int(0.5 * fs)          # 125
+    t_end   = t_start + 400          # 525  (1.6 s window)
+
+    # Baseline correction (supervisor paper Section II.A)
+    X_train = baseline_correct(X_train, fs=fs)
+    X_test  = baseline_correct(X_test,  fs=fs)
 
     if augment:
-        X_train, y_train = sliding_window_augment(X_train, y_train,
-                                                  window_samples=500, step_samples=50)
+        X_train, y_train = sliding_window_augment(X_train, y_train)
     else:
         X_train = X_train[:, t_start:t_end, :]
 
