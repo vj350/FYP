@@ -32,21 +32,7 @@ TensorFlow's GPU support on Windows requires **WSL 2 (Windows Subsystem for Linu
 
 ### Setup (one-time)
 
-1. **Enable WSL 2** in Windows and install Ubuntu from the Microsoft Store
-2. **Install NVIDIA CUDA drivers** on Windows (not inside WSL — the Windows driver is shared)
-3. **Inside WSL**, install the CUDA toolkit and cuDNN:
-   ```bash
-   sudo apt update
-   sudo apt install nvidia-cuda-toolkit
-   ```
-4. **Install TensorFlow inside WSL:**
-   ```bash
-   pip install tensorflow[and-cuda]
-   ```
-5. Verify GPU is detected:
-   ```bash
-   python -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"
-   ```
+This [YouTube tutorial](https://www.youtube.com/watch?v=LHtNv-dq8I4) is very useful for getting TensorFlow running with GPU on WSL.
 
 If you are running on CPU only, the code will still work — deep learning models will just be slower. ATCNet and MCSANet in particular benefit significantly from GPU.
 
@@ -140,5 +126,7 @@ Results are saved to:
 
 ## Attribution
 
-ATCNet architecture adapted from [Altaheri et al. 2022](https://github.com/Altaheri/EEG-ATCNet) (MIT License).  
-All other models implemented from scratch following their respective papers.
+- **ATCNet** architecture adapted from [Altaheri et al. — EEG-ATCNet](https://github.com/Altaheri/EEG-ATCNet) (MIT License)
+- **EEGNet, DeepConvNet, ShallowConvNet** architectures referenced from [ARL EEGModels](https://github.com/vlawhern/arl-eegmodels) (Creative Commons License)
+- **MCSANet** implemented from scratch following Devi et al. 2026
+- **CSP / FBCSP** implemented from scratch following Ang et al. 2008
