@@ -1,0 +1,63 @@
+Subject  1 | CSP + SVM            | acc=44.13%  kappa=0.26
+Subject  1 | FBCSP + SVM          | acc=39.86%  kappa=0.20
+Subject  1 | EEGNet               | acc=58.72%  kappa=0.45
+Subject  1 | DeepConvNet          | acc=64.77%  kappa=0.53
+Subject  1 | ShallowConvNet       | acc=52.31%  kappa=0.37
+Subject  1 | ATCNet               | acc=61.21%  kappa=0.48
+Subject  1 | MCSANet              | acc=72.24%  kappa=0.63
+Subject  2 | CSP + SVM            | acc=28.98%  kappa=0.05
+Subject  2 | FBCSP + SVM          | acc=25.09%  kappa=0.00
+Subject  2 | EEGNet               | acc=26.50%  kappa=0.02
+Subject  2 | DeepConvNet          | acc=32.86%  kappa=0.11
+Subject  2 | ShallowConvNet       | acc=27.21%  kappa=0.03
+Subject  2 | ATCNet               | acc=40.64%  kappa=0.21
+Subject  2 | MCSANet              | acc=38.16%  kappa=0.18
+Subject  3 | CSP + SVM            | acc=45.05%  kappa=0.27
+Subject  3 | FBCSP + SVM          | acc=38.10%  kappa=0.18
+Subject  3 | EEGNet               | acc=78.75%  kappa=0.72
+Subject  3 | DeepConvNet          | acc=65.57%  kappa=0.54
+Subject  3 | ShallowConvNet       | acc=64.47%  kappa=0.53
+Subject  3 | ATCNet               | acc=78.75%  kappa=0.72
+Subject  3 | MCSANet              | acc=75.82%  kappa=0.68
+Subject  4 | CSP + SVM            | acc=32.02%  kappa=0.09
+Subject  4 | FBCSP + SVM          | acc=30.26%  kappa=0.06
+Subject  4 | EEGNet               | acc=47.37%  kappa=0.30
+Subject  4 | DeepConvNet          | acc=27.63%  kappa=0.04
+Subject  4 | ShallowConvNet       | acc=40.79%  kappa=0.21
+Subject  4 | ATCNet               | acc=47.81%  kappa=0.30
+Subject  4 | MCSANet              | acc=51.75%  kappa=0.35
+Subject  5 | CSP + SVM            | acc=30.43%  kappa=0.08
+Subject  5 | FBCSP + SVM          | acc=28.99%  kappa=0.06
+Subject  5 | EEGNet               | acc=25.72%  kappa=0.01
+Subject  5 | DeepConvNet          | acc=31.16%  kappa=0.08
+Subject  5 | ShallowConvNet       | acc=23.55%  kappa=0.00
+Subject  5 | ATCNet               | acc=46.74%  kappa=0.30
+Subject  5 | MCSANet              | acc=37.32%  kappa=0.16
+Subject  6 | CSP + SVM            | acc=26.98%  kappa=0.03
+Subject  6 | FBCSP + SVM          | acc=28.37%  kappa=0.05
+Subject  6 | EEGNet               | acc=33.02%  kappa=0.11
+Subject  6 | DeepConvNet          | acc=33.49%  kappa=0.12
+Subject  6 | ShallowConvNet       | acc=33.02%  kappa=0.11
+Subject  6 | ATCNet               | acc=46.05%  kappa=0.28
+Subject  6 | MCSANet              | acc=38.60%  kappa=0.18
+Subject  7 | CSP + SVM            | acc=36.10%  kappa=0.14
+Subject  7 | FBCSP + SVM          | acc=35.02%  kappa=0.13
+Subject  7 | EEGNet               | acc=46.21%  kappa=0.28
+Subject  7 | DeepConvNet          | acc=45.13%  kappa=0.27
+Subject  7 | ShallowConvNet       | acc=35.02%  kappa=0.13
+Subject  7 | ATCNet               | acc=62.45%  kappa=0.50
+Subject  7 | MCSANet              | acc=66.79%  kappa=0.56
+Subject  8 | CSP + SVM            | acc=57.93%  kappa=0.44
+Subject  8 | FBCSP + SVM          | acc=52.77%  kappa=0.37
+Subject  8 | EEGNet               | acc=70.85%  kappa=0.61
+Subject  8 | DeepConvNet          | acc=59.78%  kappa=0.46
+Subject  8 | ShallowConvNet       | acc=69.74%  kappa=0.60
+Subject  8 | ATCNet               | acc=66.05%  kappa=0.55
+Subject  8 | MCSANet              | acc=66.42%  kappa=0.55
+Subject  9 | CSP + SVM            | acc=38.64%  kappa=0.18
+Subject  9 | FBCSP + SVM          | acc=41.67%  kappa=0.22
+Subject  9 | EEGNet               | acc=41.67%  kappa=0.22
+Subject  9 | DeepConvNet          | acc=47.73%  kappa=0.30
+Subject  9 | ShallowConvNet       | acc=43.18%  kappa=0.24
+Subject  9 | ATCNet               | acc=50.00%  kappa=0.33
+Subject  9 | MCSANet              | acc=55.30%  kappa=0.40

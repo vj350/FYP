@@ -149,7 +149,7 @@ def bandpass_filter(
     order: int = FILTER_ORDER,
 ) -> np.ndarray:
     """
-    Band-pass filter.
+    Band-pass filter using Butterworth (zero-phase).
 
     Input shape:
         (samples, channels)

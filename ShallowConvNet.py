@@ -2,7 +2,7 @@ import time
 import numpy as np
 
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.callbacks import ModelCheckpoint
 from sklearn.metrics import accuracy_score, cohen_kappa_score
 
 from EEGModels import ShallowConvNet
@@ -104,12 +104,16 @@ def run_shallowconvnet_holdout(X_train, y_train, X_test, y_test,
     model.compile(loss='sparse_categorical_crossentropy',
                   optimizer=Adam(learning_rate=learning_rate), metrics=['accuracy'])
 
-    early_stop = EarlyStopping(monitor='val_loss', patience=20,
-                               restore_best_weights=True, verbose=0)
+    import tempfile, os
+    tmpfile = tempfile.mktemp(suffix='.weights.h5')
+    checkpoint = ModelCheckpoint(tmpfile, monitor='val_loss',
+                                 save_best_only=True, save_weights_only=True, verbose=0)
     start = time.time()
     model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size,
-              validation_split=0.2, callbacks=[early_stop], verbose=0)
+              validation_split=0.2, callbacks=[checkpoint], verbose=0)
     end = time.time()
+    model.load_weights(tmpfile)
+    os.remove(tmpfile)
 
     y_pred = np.argmax(model.predict(X_test, verbose=0), axis=1)
     acc = accuracy_score(y_test, y_pred)

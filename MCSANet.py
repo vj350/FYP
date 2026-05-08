@@ -17,7 +17,7 @@ from preprocessing import (
     get_training_files,
     preprocess_subject_windows,
 )
-def MCSANet(nb_classes, Chans=3, Samples=1000, F1=8, D=2, num_heads=2,
+def MCSANet(nb_classes, Chans=3, Samples=1000, F1=8, D=2, num_heads=1,
             dropout_rate=0.5, Fs=250):
     """
     Keras implementation of MCSANet:
@@ -174,7 +174,9 @@ def tss_augment(X, y, n_new_trials=200, n_segments=4, n_select=4, random_state=4
             segments = []
             for s in range(n_segments):
                 trial = selected[s % n_select]
-                segments.append(X[trial, s * seg_len:(s + 1) * seg_len, :])
+                start = s * seg_len
+                end = start + seg_len if s < n_segments - 1 else T
+                segments.append(X[trial, start:end, :])
             X_new.append(np.concatenate(segments, axis=0))
             y_new.append(cls)
 
@@ -231,14 +233,21 @@ def run_mcsanet_holdout(X_train, y_train, X_test, y_test,
     n_samples = X_train.shape[2]
 
     model = MCSANet(nb_classes=n_classes, Chans=n_channels, Samples=n_samples,
-                    F1=8, D=2, num_heads=2, dropout_rate=0.5, Fs=250)
+                    F1=8, D=2, num_heads=1, dropout_rate=0.5, Fs=250)
     model.compile(loss='sparse_categorical_crossentropy',
                   optimizer=Adam(learning_rate=learning_rate), metrics=['accuracy'])
 
+    import tempfile, os
+    tmpfile = tempfile.mktemp(suffix='.weights.h5')
+    from tensorflow.keras.callbacks import ModelCheckpoint
+    checkpoint = ModelCheckpoint(tmpfile, monitor='val_loss',
+                                 save_best_only=True, save_weights_only=True, verbose=0)
     start = time.time()
     model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size,
-              validation_split=0.2, verbose=0)
+              validation_split=0.2, callbacks=[checkpoint], verbose=0)
     end = time.time()
+    model.load_weights(tmpfile)
+    os.remove(tmpfile)
 
     y_pred = np.argmax(model.predict(X_test, verbose=0), axis=1)
     acc = accuracy_score(y_test, y_pred)
