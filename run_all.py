@@ -84,14 +84,10 @@ MODEL_DISPLAY = {
     "mcsanet":      "MCSANet",
 }
 
-# Models that receive raw (unfiltered) signal from preprocessing and apply
-# their own filtering internally.
-# CSP/FBCSP: baseline correction first, then per-band Chebyshev II filter bank
-#            (supervisor paper order: B->F).
-# EEGNet/DeepConvNet/ShallowConvNet: internal 1-50 Hz Butterworth + baseline.
-# ATCNet: internal 4-40 Hz Butterworth (Altaheri et al. 2022).
-# MCSANet: no filter, raw signal (Devi et al. 2026).
-MODELS_NO_FILTER = {"csp", "fbcsp", "eegnet", "deepconv", "shallowconv", "atcnet", "mcsanet"}
+# Models that use no bandpass filter (raw signal passed in)
+# MCSANet paper explicitly states raw signal — no bandpass filter
+# All other DL models use the broad bandpass from config (C/D factors)
+MODELS_NO_FILTER = {"mcsanet"}
 
 
 def run_model_holdout(name, X_train, y_train, X_test, y_test, config, augment=True):
