@@ -26,6 +26,7 @@ Available model names:
 """
 
 import argparse
+import os
 import time
 import numpy as np
 from sklearn.model_selection import StratifiedKFold
@@ -87,7 +88,7 @@ MODEL_DISPLAY = {
 # Models that use no bandpass filter (raw signal passed in)
 # MCSANet paper explicitly states raw signal — no bandpass filter
 # All other DL models use the broad bandpass from config (C/D factors)
-MODELS_NO_FILTER = {"mcsanet"}
+MODELS_NO_FILTER = {"eegnet", "deepconv", "shallowconv", "atcnet", "mcsanet"}
 
 
 def run_model_holdout(name, X_train, y_train, X_test, y_test, config, augment=True):
@@ -100,25 +101,26 @@ def run_model_holdout(name, X_train, y_train, X_test, y_test, config, augment=Tr
         return run_csp_svm_holdout(X_train, y_train, X_test, y_test, augment=augment)
     elif name == "fbcsp":
         return run_fbcsp_svm_holdout(X_train, y_train, X_test, y_test,
-                                     config=config, augment=augment)
+                                     config=config, n_csp_components=4,
+                                     k_features=16, augment=augment)
     elif name == "eegnet":
         return run_eegnet_holdout(X_train, y_train, X_test, y_test,
-                                  epochs=200, batch_size=16, learning_rate=1e-3,
+                                  epochs=500, batch_size=16, learning_rate=1e-3,
                                   augment=augment)
     elif name == "deepconv":
         return run_deepconvnet_holdout(X_train, y_train, X_test, y_test,
-                                       epochs=200, batch_size=16, learning_rate=1e-3,
+                                       epochs=500, batch_size=16, learning_rate=1e-3,
                                        augment=augment)
     elif name == "shallowconv":
         return run_shallowconvnet_holdout(X_train, y_train, X_test, y_test,
-                                          epochs=200, batch_size=16, learning_rate=1e-3,
+                                          epochs=500, batch_size=16, learning_rate=1e-3,
                                           augment=augment)
     elif name == "atcnet":
         return run_atcnet_holdout(X_train, y_train, X_test, y_test,
                                   epochs=500, batch_size=64, learning_rate=1e-3)
     elif name == "mcsanet":
         return run_mcsanet_holdout(X_train, y_train, X_test, y_test,
-                                   epochs=300, batch_size=16, learning_rate=1e-3,
+                                   epochs=500, batch_size=16, learning_rate=1e-3,
                                    augment=augment)
     else:
         raise ValueError(f"Unknown model: {name}")
@@ -196,6 +198,99 @@ def print_results_table(results: dict, per_subject: dict = None):
     print("=" * 76)
 
 
+def save_partial_result(dataset: str, protocol: str, subject_idx: int,
+                        model_name: str, acc: float, kappa: float):
+    """
+    Append a single model result for one subject immediately after it completes.
+    Acts as a checkpoint in case the run is interrupted.
+    """
+    filename = f"results_{dataset}_{protocol}_checkpoint.txt"
+    line = f"Subject {subject_idx+1:2d} | {model_name:<20} | acc={acc*100:.2f}%  kappa={kappa:.2f}\n"
+    with open(filename, "a", encoding="utf-8") as f:
+        f.write(line)
+
+
+def load_completed_results(dataset: str, protocol: str):
+    """
+    Read checkpoint file and return:
+      - completed : set of (subject_idx, model_display_name) already done
+      - saved     : dict mapping (subject_idx, model_display_name) -> (acc, kappa)
+    Used to skip already-done work and restore results when resuming an interrupted run.
+    """
+    filename = f"results_{dataset}_{protocol}_checkpoint.txt"
+    completed = set()
+    saved = {}
+    if not os.path.exists(filename):
+        return completed, saved
+    with open(filename, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                # Format: "Subject  1 | ModelName            | acc=XX.XX%  kappa=X.XX"
+                parts = line.split("|")
+                subj_idx = int(parts[0].replace("Subject", "").strip()) - 1
+                model_name = parts[1].strip()
+                acc_str = parts[2].split("acc=")[1].split("%")[0]
+                kappa_str = parts[2].split("kappa=")[1]
+                acc = float(acc_str) / 100.0
+                kappa = float(kappa_str)
+                completed.add((subj_idx, model_name))
+                saved[(subj_idx, model_name)] = (acc, kappa)
+            except Exception:
+                continue
+    return completed, saved
+
+
+def save_results_to_file(results: dict, data_label: str, dataset: str,
+                         protocol: str, total_time: float,
+                         per_subject: dict = None):
+    """
+    Save results to a text file (results_2a.txt or results_2b.txt).
+    """
+    filename = f"results_{dataset}.txt"
+    lines = []
+    models = list(results.keys())
+    col = 12  # column width per model
+
+    if per_subject:
+        n_subjects = len(next(iter(per_subject.values())))
+        # Header
+        header = f"{'Subject':<10}" + "".join(f"{m:>{col}}" for m in models)
+        sep = "-" * len(header)
+        lines.append(header)
+        lines.append(sep)
+        for i in range(n_subjects):
+            row = f"{'S' + str(i+1):<10}"
+            for m in models:
+                acc, _ = per_subject[m][i]
+                row += f"{acc*100:>10.2f}%  "
+            lines.append(row)
+        lines.append(sep)
+        lines.append("")
+
+    # Overall summary
+    lines.append("Overall (mean +/- std):")
+    lines.append("")
+    hdr2 = f"{'Model':<18} {'Accuracy':>22}   {'k':>6}   {'Avg Time':>10}"
+    lines.append(hdr2)
+    lines.append("-" * len(hdr2))
+    for display_name, vals in results.items():
+        mean_acc, std_acc, mean_kappa, std_kappa, mean_time = vals
+        lines.append(
+            f"{display_name:<18} "
+            f"{mean_acc*100:>8.2f}% +/- {std_acc*100:>6.2f}%"
+            f"   {mean_kappa:>6.2f}"
+            f"   {mean_time:>8.0f}s"
+        )
+
+    with open(filename, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+
+    print(f"\nResults saved to {filename}")
+
+
 # =========================
 # Main
 # =========================
@@ -255,6 +350,8 @@ def main():
         if args.protocol == "te":
             if args.all_subjects:
                 print(f"\nRunning T-E holdout on all {len(t_files)} subjects...")
+                # Clear checkpoint file so this run starts fresh
+                open(f"results_{args.dataset}_{args.protocol}_checkpoint.txt", "w", encoding="utf-8").close()
                 subj_accs   = {n: [] for n in args.models}
                 subj_kappas = {n: [] for n in args.models}
                 subj_times  = {n: [] for n in args.models}
@@ -280,6 +377,7 @@ def main():
                         subj_kappas[name].append(kappa)
                         subj_times[name].append(t)
                         per_subject[display].append((acc, kappa))
+                        save_partial_result(args.dataset, args.protocol, i-1, display, acc, kappa)
 
                 for name in args.models:
                     display = MODEL_DISPLAY[name]
@@ -315,13 +413,32 @@ def main():
 
         # ── LOSO ─────────────────────────────────────────────────────────
         elif args.protocol == "loso":
-            print(f"\nRunning LOSO on all {len(t_files)} subjects (2b)...")
+            loso_indices = list(range(len(t_files))) if args.all_subjects else [args.subject - 1]
+            if args.all_subjects:
+                print(f"\nRunning LOSO on all {len(t_files)} subjects (2b)...")
+                completed, saved = load_completed_results(args.dataset, args.protocol)
+                if completed:
+                    print(f"  Resuming — {len(completed)} results already in checkpoint, skipping those.")
+                else:
+                    open(f"results_{args.dataset}_{args.protocol}_checkpoint.txt", "w", encoding="utf-8").close()
+                    saved = {}
+            else:
+                print(f"\nRunning LOSO fold for subject {args.subject} (2b)...")
+                completed, saved = set(), {}
             subj_accs   = {n: [] for n in args.models}
             subj_kappas = {n: [] for n in args.models}
             subj_times  = {n: [] for n in args.models}
             per_subject = {MODEL_DISPLAY[n]: [] for n in args.models}
+            # Pre-populate results from checkpoint
+            for (sidx, mdisplay), (acc, kappa) in saved.items():
+                for n in args.models:
+                    if MODEL_DISPLAY[n] == mdisplay:
+                        subj_accs[n].append(acc)
+                        subj_kappas[n].append(kappa)
+                        subj_times[n].append(0.0)
+                        per_subject[mdisplay].append((acc, kappa))
 
-            for test_idx in range(len(t_files)):
+            for test_idx in loso_indices:
                 print(f"\n--- LOSO: Test subject {test_idx+1} ---")
                 train_files = [f for i, f in enumerate(t_files) if i != test_idx]
 
@@ -341,14 +458,17 @@ def main():
                         X_tr_raw_parts.append(X_raw_)
                     X_train_raw = np.concatenate(X_tr_raw_parts, axis=0)
 
-                X_test, y_test, _ = preprocess_subject_windows(t_files[test_idx], config)
+                X_test, y_test, _ = preprocess_subject_windows(e_files[test_idx], config)
                 if needs_raw:
-                    X_test_raw, _, _ = preprocess_subject_windows(t_files[test_idx], config, apply_filter=False)
+                    X_test_raw, _, _ = preprocess_subject_windows(e_files[test_idx], config, apply_filter=False)
 
                 print(f"  Train: {X_train.shape[0]} trials  Test: {X_test.shape[0]} trials")
 
                 for name in args.models:
                     display = MODEL_DISPLAY[name]
+                    if (test_idx, display) in completed:
+                        print(f"  Skipping {display} (already done)")
+                        continue
                     print(f"\n{'=' * 50}\n  Running: {display}\n{'=' * 50}")
                     Xtr = X_train_raw if name in MODELS_NO_FILTER else X_train
                     Xte = X_test_raw if name in MODELS_NO_FILTER else X_test
@@ -358,6 +478,7 @@ def main():
                     subj_kappas[name].append(kappa)
                     subj_times[name].append(t)
                     per_subject[display].append((acc, kappa))
+                    save_partial_result(args.dataset, args.protocol, test_idx, display, acc, kappa)
 
             for name in args.models:
                 display = MODEL_DISPLAY[name]
@@ -368,7 +489,7 @@ def main():
                     np.std(subj_kappas[name]),
                     np.mean(subj_times[name]),
                 )
-            data_label = "all subjects (LOSO)"
+            data_label = f"subject {args.subject} (LOSO fold)" if not args.all_subjects else "all subjects (LOSO)"
 
         # ── 10-fold CV ────────────────────────────────────────────────────
         elif args.all_subjects:
@@ -442,6 +563,8 @@ def main():
         if args.protocol == "te":
             if args.all_subjects:
                 print(f"\nRunning T-E holdout on all {len(t_files)} subjects...")
+                # Clear checkpoint file so this run starts fresh
+                open(f"results_{args.dataset}_{args.protocol}_checkpoint.txt", "w", encoding="utf-8").close()
                 subj_accs   = {n: [] for n in args.models}
                 subj_kappas = {n: [] for n in args.models}
                 subj_times  = {n: [] for n in args.models}
@@ -455,18 +578,27 @@ def main():
                     if needs_raw:
                         X_tr_raw, _, _ = preprocess_subject_windows_2a(tf, config, apply_filter=False)
                         X_te_raw, _, _ = preprocess_subject_windows_2a(ef, config, apply_filter=False)
+                    # MCSANet and ATCNet use B=3 (1.5-6.0s, 1125 samples) to match their papers
+                    if "mcsanet" in args.models or "atcnet" in args.models:
+                        config_b3 = PreprocessingConfig(A=config.A, B=3, C=config.C, D=config.D)
+                        X_tr_mcsanet, _, _ = preprocess_subject_windows_2a(tf, config_b3, apply_filter=False)
+                        X_te_mcsanet, _, _ = preprocess_subject_windows_2a(ef, config_b3, apply_filter=False)
 
                     for name in args.models:
                         display = MODEL_DISPLAY[name]
                         print(f"\n{'=' * 50}\n  Running: {display}\n{'=' * 50}")
-                        Xtr = X_tr_raw if name in MODELS_NO_FILTER else X_tr
-                        Xte = X_te_raw if name in MODELS_NO_FILTER else X_te
+                        if name in ("mcsanet", "atcnet"):
+                            Xtr, Xte = X_tr_mcsanet, X_te_mcsanet
+                        else:
+                            Xtr = X_tr_raw if name in MODELS_NO_FILTER else X_tr
+                            Xte = X_te_raw if name in MODELS_NO_FILTER else X_te
                         acc, kappa, t = run_model_holdout(name, Xtr, y_tr, Xte, y_te, config, augment=True)
                         print(f"  {display}: {acc*100:.2f}%  kappa: {kappa:.2f}")
                         subj_accs[name].append(acc)
                         subj_kappas[name].append(kappa)
                         subj_times[name].append(t)
                         per_subject[display].append((acc, kappa))
+                        save_partial_result(args.dataset, args.protocol, i-1, display, acc, kappa)
 
                 for name in args.models:
                     display = MODEL_DISPLAY[name]
@@ -488,13 +620,21 @@ def main():
                 if needs_raw:
                     X_tr_raw, _, _ = preprocess_subject_windows_2a(t_files[idx], config, apply_filter=False)
                     X_te_raw, _, _ = preprocess_subject_windows_2a(e_files[idx], config, apply_filter=False)
+                # MCSANet uses B=3 (1.5-6.0s, 1125 samples) to match paper
+                if "mcsanet" in args.models:
+                    config_b3 = PreprocessingConfig(A=config.A, B=3, C=config.C, D=config.D)
+                    X_tr_mcsanet, _, _ = preprocess_subject_windows_2a(t_files[idx], config_b3, apply_filter=False)
+                    X_te_mcsanet, _, _ = preprocess_subject_windows_2a(e_files[idx], config_b3, apply_filter=False)
                 print(f"Train trials: {X_tr.shape[0]}  Test trials: {X_te.shape[0]}")
 
                 for name in args.models:
                     display = MODEL_DISPLAY[name]
                     print(f"\n{'=' * 50}\n  Running: {display}\n{'=' * 50}")
-                    Xtr = X_tr_raw if name in MODELS_NO_FILTER else X_tr
-                    Xte = X_te_raw if name in MODELS_NO_FILTER else X_te
+                    if name == "mcsanet":
+                        Xtr, Xte = X_tr_mcsanet, X_te_mcsanet
+                    else:
+                        Xtr = X_tr_raw if name in MODELS_NO_FILTER else X_tr
+                        Xte = X_te_raw if name in MODELS_NO_FILTER else X_te
                     acc, kappa, t = run_model_holdout(name, Xtr, y_tr, Xte, y_te, config, augment=True)
                     print(f"  {display}: {acc*100:.2f}%  kappa: {kappa:.2f}")
                     results[display] = (acc, 0.0, kappa, 0.0, t)
@@ -502,13 +642,32 @@ def main():
 
         # ── LOSO ─────────────────────────────────────────────────────────
         elif args.protocol == "loso":
-            print(f"\nRunning LOSO on all {len(t_files)} subjects (2a)...")
+            loso_indices = list(range(len(t_files))) if args.all_subjects else [args.subject - 1]
+            if args.all_subjects:
+                print(f"\nRunning LOSO on all {len(t_files)} subjects (2a)...")
+                completed, saved = load_completed_results(args.dataset, args.protocol)
+                if completed:
+                    print(f"  Resuming — {len(completed)} results already in checkpoint, skipping those.")
+                else:
+                    open(f"results_{args.dataset}_{args.protocol}_checkpoint.txt", "w", encoding="utf-8").close()
+                    saved = {}
+            else:
+                print(f"\nRunning LOSO fold for subject {args.subject} (2a)...")
+                completed, saved = set(), {}
             subj_accs   = {n: [] for n in args.models}
             subj_kappas = {n: [] for n in args.models}
             subj_times  = {n: [] for n in args.models}
             per_subject = {MODEL_DISPLAY[n]: [] for n in args.models}
+            # Pre-populate results from checkpoint
+            for (sidx, mdisplay), (acc, kappa) in saved.items():
+                for n in args.models:
+                    if MODEL_DISPLAY[n] == mdisplay:
+                        subj_accs[n].append(acc)
+                        subj_kappas[n].append(kappa)
+                        subj_times[n].append(0.0)
+                        per_subject[mdisplay].append((acc, kappa))
 
-            for test_idx in range(len(t_files)):
+            for test_idx in loso_indices:
                 print(f"\n--- LOSO: Test subject {test_idx+1} ---")
                 train_files = [f for i, f in enumerate(t_files) if i != test_idx]
 
@@ -528,23 +687,40 @@ def main():
                         X_tr_raw_parts.append(X_raw_)
                     X_train_raw = np.concatenate(X_tr_raw_parts, axis=0)
 
-                X_test, y_test, _ = preprocess_subject_windows_2a(t_files[test_idx], config)
+                X_test, y_test, _ = preprocess_subject_windows_2a(e_files[test_idx], config)
                 if needs_raw:
-                    X_test_raw, _, _ = preprocess_subject_windows_2a(t_files[test_idx], config, apply_filter=False)
+                    X_test_raw, _, _ = preprocess_subject_windows_2a(e_files[test_idx], config, apply_filter=False)
+
+                # MCSANet and ATCNet use B=3 (1.5-6.0s, 1125 samples) to match their papers
+                if "mcsanet" in args.models or "atcnet" in args.models:
+                    config_b3 = PreprocessingConfig(A=config.A, B=3, C=config.C, D=config.D)
+                    X_tr_mcsanet_parts = []
+                    for f in train_files:
+                        X_m_, _, _ = preprocess_subject_windows_2a(f, config_b3, apply_filter=False)
+                        X_tr_mcsanet_parts.append(X_m_)
+                    X_train_mcsanet = np.concatenate(X_tr_mcsanet_parts, axis=0)
+                    X_test_mcsanet, _, _ = preprocess_subject_windows_2a(e_files[test_idx], config_b3, apply_filter=False)
 
                 print(f"  Train: {X_train.shape[0]} trials  Test: {X_test.shape[0]} trials")
 
                 for name in args.models:
                     display = MODEL_DISPLAY[name]
+                    if (test_idx, display) in completed:
+                        print(f"  Skipping {display} (already done)")
+                        continue
                     print(f"\n{'=' * 50}\n  Running: {display}\n{'=' * 50}")
-                    Xtr = X_train_raw if name in MODELS_NO_FILTER else X_train
-                    Xte = X_test_raw if name in MODELS_NO_FILTER else X_test
+                    if name in ("mcsanet", "atcnet"):
+                        Xtr, Xte = X_train_mcsanet, X_test_mcsanet
+                    else:
+                        Xtr = X_train_raw if name in MODELS_NO_FILTER else X_train
+                        Xte = X_test_raw if name in MODELS_NO_FILTER else X_test
                     acc, kappa, t = run_model_holdout(name, Xtr, y_train, Xte, y_test, config, augment=True)
                     print(f"  {display}: {acc*100:.2f}%  kappa: {kappa:.2f}")
                     subj_accs[name].append(acc)
                     subj_kappas[name].append(kappa)
                     subj_times[name].append(t)
                     per_subject[display].append((acc, kappa))
+                    save_partial_result(args.dataset, args.protocol, test_idx, display, acc, kappa)
 
             for name in args.models:
                 display = MODEL_DISPLAY[name]
@@ -555,7 +731,7 @@ def main():
                     np.std(subj_kappas[name]),
                     np.mean(subj_times[name]),
                 )
-            data_label = "all subjects (LOSO)"
+            data_label = f"subject {args.subject} (LOSO fold)" if not args.all_subjects else "all subjects (LOSO)"
 
         # ── 10-fold CV ────────────────────────────────────────────────────
         elif args.all_subjects:
@@ -627,6 +803,8 @@ def main():
     print(f"\nData: {data_label}")
     print_results_table(results, per_subject=per_subject)
     print(f"\nTotal experiment time: {total_time:.1f} s")
+    save_results_to_file(results, data_label, args.dataset, args.protocol,
+                         total_time, per_subject=per_subject)
 
 
 if __name__ == "__main__":

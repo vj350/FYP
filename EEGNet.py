@@ -2,7 +2,7 @@ import time
 import numpy as np
 
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.callbacks import ReduceLROnPlateau, ModelCheckpoint
 from sklearn.metrics import accuracy_score, cohen_kappa_score
 
 from EEGModels import EEGNet
@@ -72,7 +72,7 @@ def run_eegnet_holdout(X_train, y_train, X_test, y_test,
     - Downsample to 128 Hz before training (paper resampled from 250 Hz)
     - augment=True: sliding window augmentation on training (~11x), single crop on test
     - augment=False: single [0.5, 2.5]s crop for both train and test
-    - kernLength=64 (half of 128 Hz sampling rate = 500 ms)
+    - kernLength=32 (quarter of 128 Hz sampling rate = 250 ms)
     - 200 epochs with early stopping
     """
     # Downsample from 250 Hz to 128 Hz (matches original paper)
@@ -98,17 +98,21 @@ def run_eegnet_holdout(X_train, y_train, X_test, y_test,
     n_samples = X_train.shape[2]
 
     model = EEGNet(nb_classes=n_classes, Chans=n_channels, Samples=n_samples,
-                   dropoutRate=0.5, kernLength=64, F1=8, D=2, F2=16,
+                   dropoutRate=0.5, kernLength=32, F1=8, D=2, F2=16,
                    norm_rate=0.25, dropoutType='Dropout')
     model.compile(loss='sparse_categorical_crossentropy',
                   optimizer=Adam(learning_rate=learning_rate), metrics=['accuracy'])
 
-    early_stop = EarlyStopping(monitor='val_loss', patience=20,
-                               restore_best_weights=True, verbose=0)
+    import tempfile, os
+    tmpfile = tempfile.mktemp(suffix='.weights.h5')
+    checkpoint = ModelCheckpoint(tmpfile, monitor='val_loss',
+                                 save_best_only=True, save_weights_only=True, verbose=0)
     start = time.time()
     model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size,
-              validation_split=0.2, callbacks=[early_stop], verbose=0)
+              validation_split=0.2, callbacks=[checkpoint], verbose=0)
     end = time.time()
+    model.load_weights(tmpfile)
+    os.remove(tmpfile)
 
     y_pred = np.argmax(model.predict(X_test, verbose=0), axis=1)
     acc = accuracy_score(y_test, y_pred)
