@@ -124,18 +124,6 @@ Results are saved to:
 
 ---
 
-## Citation
-
-If referencing this work:
-
-```
-V. Jaroenpanichying, "Comparing Classical and Deep Learning Methods for Motor Imagery
-EEG Classification," BEng Robotics Engineering Final Year Project, University of Bath,
-2026. (unpublished)
-```
-
----
-
 ## Attribution
 
 - **ATCNet** architecture adapted from [Altaheri et al. — EEG-ATCNet](https://github.com/Altaheri/EEG-ATCNet) (MIT License)
